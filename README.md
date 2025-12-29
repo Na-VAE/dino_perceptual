@@ -2,7 +2,9 @@
 
 A drop-in replacement for LPIPS using DINOv3 features. Achieves better perceptual quality metrics (rFID, FDD) than VGG-based LPIPS while being simpler and more robust.
 
-**Why DINO over VGG?** DINOv3 is trained with self-supervised learning on 1.7B images using modern Vision Transformer architectures. This produces richer, more semantically meaningful features compared to VGG-16's classification-focused features from 2014. The result: **2x better perceptual metrics** with the same training setup.
+**Why DINO over VGG?** DINOv3 is trained with self-supervised learning on 1.7B images using modern Vision Transformer architectures. This produces richer, more semantically meaningful features compared to VGG-16's classification-focused features from 2014. The result: **2× better perceptual metrics** with the same training setup.
+
+📄 **[Read the full documentation and benchmarks →](https://na-vae.github.io/dino-perceptual/)**
 
 ## Installation
 
