@@ -230,20 +230,12 @@
             <td>0.860</td>
         </tr>
         <tr>
-            <td>FLUX.1 <a href="#ref-flux">[4]</a></td>
+            <td>FLUX.1* <a href="#ref-flux">[4]</a></td>
             <td>f8&times;16ch</td>
-            <td>0.34</td>
+            <td>0.15</td>
             <td>2.29</td>
-            <td>31.13</td>
-            <td>0.889</td>
-        </tr>
-        <tr>
-            <td>FLUX.2 <a href="#ref-flux">[4]</a></td>
-            <td>f8&times;16ch</td>
-            <td>0.27</td>
-            <td>&mdash;</td>
-            <td>31.46</td>
-            <td>0.904</td>
+            <td>31.10</td>
+            <td>0.887</td>
         </tr>
         <tr style="background: #f0fdf4;">
             <td><strong>ViTok-v2 Td4-T/16&times;16</strong></td>
@@ -276,7 +268,7 @@
     <strong>No GAN required:</strong> ViTok-v2 achieves these results using only L1 (Charbonnier) + DINO perceptual loss + scaling losses (SSIM, FFT). No adversarial training needed, which simplifies training and improves stability.
 </div>
 
-<p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">ViTok uses 4&times; fewer tokens (256 vs 1024) than f8-based methods, enabling faster diffusion training. All ViTok-v2 models are 4.5B parameters (Td4-T configuration).</p>
+<p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">*Self-reproduced results. ViTok uses 4&times; fewer tokens (256 vs 1024) than f8-based methods, enabling faster diffusion training. All ViTok-v2 models are 4.5B parameters (Td4-T configuration).</p>
 
 <h3>Loss Ablation</h3>
 
