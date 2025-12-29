@@ -5,14 +5,25 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dino-perceptual"
 version = "0.1.0"
-description = "DINO-based perceptual losses and FDD feature extraction"
+description = "DINO-based perceptual loss for image reconstruction and generation"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "ViTok Team"}
+    {name = "Philippe Hansen-Estruch"},
+    {name = "Jiahui Chen"},
+    {name = "Vivek Ramanujan"},
+    {name = "Orr Zohar"},
+    {name = "Yan Ping"},
+    {name = "Animesh Sinha"},
+    {name = "Markos Georgopoulos"},
+    {name = "Edgar Schoenfeld"},
+    {name = "Ji Hou"},
+    {name = "Felix Juefei-Xu"},
+    {name = "Sriram Vishwanath"},
+    {name = "Ali Thabet"},
 ]
-keywords = ["deep-learning", "perceptual-loss", "dino", "fdd", "computer-vision"]
+keywords = ["deep-learning", "perceptual-loss", "dino", "lpips", "computer-vision", "image-generation"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -34,10 +45,15 @@ dev = [
     "pytest>=7.0",
     "ruff>=0.1.0",
 ]
+examples = [
+    "matplotlib>=3.5.0",
+    "pillow>=9.0.0",
+    "lpips>=0.1.4",
+]
 
 [project.urls]
-Homepage = "https://github.com/vitok/dino-perceptual"
-Repository = "https://github.com/vitok/dino-perceptual"
+Homepage = "https://github.com/Na-VAE/dino-perceptual"
+Repository = "https://github.com/Na-VAE/dino-perceptual"
 
 [tool.setuptools.packages.find]
 where = ["."]

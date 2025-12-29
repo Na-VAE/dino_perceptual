@@ -1,6 +1,6 @@
-# dino-perceptual
+# DINO Perceptual Loss
 
-DINO-based perceptual losses and feature extraction for image generation.
+A drop-in replacement for LPIPS using DINOv2 features. Achieves better perceptual quality metrics (rFID, FDD) than VGG-based LPIPS while being simpler and more robust.
 
 ## Installation
 
@@ -8,70 +8,120 @@ DINO-based perceptual losses and feature extraction for image generation.
 pip install dino-perceptual
 ```
 
-Or install from source:
+Or from source:
+
 ```bash
+git clone https://github.com/Na-VAE/dino-perceptual.git
+cd dino-perceptual
 pip install -e .
 ```
 
-## Usage
-
-### Perceptual Loss for Training
+## Quick Start
 
 ```python
-from dino_perceptual import DINOv3Perceptual
+from dino_perceptual import DINOPerceptual
 
-# Create loss function (uses DINOv3 ViT-B/16 by default)
-loss_fn = DINOv3Perceptual(model_size='B', target_size=512)
-loss_fn = loss_fn.to('cuda').eval()
+# Initialize loss function
+loss_fn = DINOPerceptual(model_size="B").cuda().eval()
 
-# Compute loss (images should be in [-1, 1] range)
-loss = loss_fn(pred_images, target_images).mean()
+# Compute perceptual loss between two images
+# Images should be tensors in [-1, 1] range with shape (B, 3, H, W)
+loss = loss_fn(predicted, target).mean()
 ```
 
-Model sizes: `'S'` (ViT-S/16), `'B'` (ViT-B/16), `'L'` (ViT-L/16), `'H'` (ViT-H/14)
-
-### Feature Extraction for FDD (Frechet DINO Distance)
+## Usage in Autoencoder Training
 
 ```python
-from dino_perceptual import DINOv3Model
+import torch
+import torch.nn as nn
+from dino_perceptual import DINOPerceptual
 
-# Create feature extractor
-extractor = DINOv3Model()
-extractor = extractor.to('cuda').eval()
+# Initialize models
+autoencoder = MyAutoencoder().cuda()
+perceptual_loss = DINOPerceptual(model_size="B").cuda().eval()
+optimizer = torch.optim.Adam(autoencoder.parameters(), lr=1e-4)
 
-# Extract features (images should be in [-1, 1] range)
-features, _ = extractor(images)  # (B, feature_dim)
+# Training loop
+for images in dataloader:
+    images = images.cuda()
+
+    # Forward pass
+    reconstructed = autoencoder(images)
+
+    # Compute losses
+    l1_loss = nn.functional.l1_loss(reconstructed, images)
+    dino_loss = perceptual_loss(reconstructed, images).mean()
+
+    # Combined loss (DINO weight ~250-1000 works well)
+    total_loss = l1_loss + 250.0 * dino_loss
+
+    # Backward pass
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
 ```
+
+## Why DINO over LPIPS?
+
+| Metric | Pixel-only | + LPIPS | + DINO |
+|--------|------------|---------|--------|
+| rFID | 2.13 | 0.72 | **0.30** |
+| rFDD | 6.96 | 2.93 | **1.12** |
+| PSNR | **34.31** | 34.19 | 33.64 |
+
+DINO perceptual loss achieves **7x better rFID** and **6x better rFDD** compared to pixel-only training, and **2x better** than LPIPS, with only ~0.7 dB PSNR trade-off.
 
 ## API Reference
 
-### DINOv3Perceptual
-
-LPIPS-like perceptual loss using frozen DINOv3 features.
+### DINOPerceptual
 
 ```python
-DINOv3Perceptual(
-    model_name=None,        # HuggingFace model name (overrides model_size)
-    model_size='B',         # Model size: 'S', 'B', 'L', 'H'
-    target_size=512,        # Max image size (larger images are downscaled)
-    layers='all',           # Which layers to use ('all' or list of indices)
-    normalize=True,         # L2-normalize features per token
-    resize_to_square=True,  # Resize vs center crop
+DINOPerceptual(
+    model_size: str = "B",      # "S", "B", "L", or "G"
+    target_size: int = 512,     # Resize images to this size
+    layers: str = "all",        # Which transformer layers to use
 )
 ```
 
-### DINOv3Model
+**Arguments:**
+- `model_size`: DINOv2 model variant. "B" (base) is recommended for most use cases.
+- `target_size`: Images are resized to this size before computing features.
+- `layers`: Which transformer layers to extract features from. "all" uses all layers.
 
-Feature extractor for FDD calculation.
+**Input format:**
+- Tensors in `[-1, 1]` range with shape `(B, 3, H, W)`
+
+**Returns:**
+- Per-sample loss tensor of shape `(B,)`
+
+### DINOModel
+
+For feature extraction (e.g., computing FDD):
 
 ```python
-DINOv3Model(
-    model_name='facebook/dinov3-vitb16-pretrain-lvd1689m',
-    resize_to_square=False,
-    target_size=512,
-)
+from dino_perceptual import DINOModel
+
+extractor = DINOModel(model_size="B").cuda().eval()
+features, cls_token = extractor(images)  # features: (B, num_patches, dim)
 ```
 
 ## License
 
-MIT
+MIT License
+
+## Citation
+
+If you find this code helpful, please cite:
+
+```bibtex
+@software{dino_perceptual,
+  title={DINO Perceptual Loss},
+  author={Hansen-Estruch, Philippe and Chen, Jiahui and Ramanujan, Vivek and Zohar, Orr and Ping, Yan and Sinha, Animesh and Georgopoulos, Markos and Schoenfeld, Edgar and Hou, Ji and Juefei-Xu, Felix and Vishwanath, Sriram and Thabet, Ali},
+  year={2025},
+  url={https://github.com/Na-VAE/dino-perceptual}
+}
+```
+
+## Acknowledgments
+
+This work builds on [DINOv2](https://github.com/facebookresearch/dinov2) by Meta AI Research and findings from the ViTok project on scaling visual tokenizers.

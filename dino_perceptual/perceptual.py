@@ -1,21 +1,19 @@
-"""DINOv3-based perceptual loss (LPIPS-like).
+"""DINO-based perceptual loss and feature extraction.
 
-Computes an LPIPS-like distance using frozen DINOv3 ViT features:
-for selected transformer layers, take token-wise features (exclude CLS),
-L2-normalize per token, compute squared differences between real and fake
-feature maps, and average only at the very end to a per-image scalar.
-
-This mimics LPIPS structure by avoiding early pooling (no CLS/mean pooling),
-preserving spatial/token structure until the final MSE reduction.
+Provides:
+- DINOPerceptual: LPIPS-like perceptual loss using DINOv2 features
+- DINOModel: Feature extractor for FDD (Frechet DINO Distance)
 
 Usage:
-    loss_fn = DINOv3Perceptual(
-        model_size="B",  # or "S", "L", "H"
-        target_size=512,
-        layers="all",
-    )
-    loss_vec = loss_fn(pred_images, ref_images)  # shape [B]
-    loss = loss_vec.mean()
+    from dino_perceptual import DINOPerceptual, DINOModel
+
+    # Perceptual loss
+    loss_fn = DINOPerceptual(model_size="B", target_size=512)
+    loss = loss_fn(pred_images, ref_images).mean()
+
+    # Feature extraction
+    extractor = DINOModel()
+    features, _ = extractor(images)  # images in [-1, 1]
 """
 
 from typing import List, Sequence, Union, Optional
@@ -25,31 +23,127 @@ import torch.nn.functional as F
 from transformers import AutoModel
 
 
-def _resolve_dinov3_model_name(model_size: str) -> str:
-    """Map a size key to a default DINOv3 HF model name.
-
-    Supported keys (case-insensitive):
-      - 'S' -> ViT-S/16
-      - 'B' -> ViT-B/16
-      - 'L' -> ViT-L/16
-      - 'H' -> ViT-H/14
-    """
+def _resolve_model_name(model_size: str) -> str:
+    """Map a size key to a DINOv2 HF model name."""
     key = str(model_size).strip().upper()
     mapping = {
-        'S': 'facebook/dinov3-vits16-pretrain-lvd1689m',
-        'B': 'facebook/dinov3-vitb16-pretrain-lvd1689m',
-        'L': 'facebook/dinov3-vitl16-pretrain-lvd1689m',
-        'H': 'facebook/dinov3-vith14-pretrain-lvd1689m',
+        'S': 'facebook/dinov2-small',
+        'B': 'facebook/dinov2-base',
+        'L': 'facebook/dinov2-large',
+        'G': 'facebook/dinov2-giant',
     }
     return mapping.get(key, mapping['B'])
 
 
-class DINOv3Perceptual(nn.Module):
-    """DINOv3-based perceptual loss function.
+class _DINOBase(nn.Module):
+    """Shared base for DINO models with common preprocessing."""
+
+    def __init__(
+        self,
+        model_name: Optional[str] = None,
+        model_size: str = "B",
+        target_size: int = 512,
+        resize_to_square: bool = True,
+    ):
+        super().__init__()
+        resolved_name = model_name or _resolve_model_name(model_size)
+        self.model = AutoModel.from_pretrained(resolved_name)
+        self.model_name = resolved_name
+
+        self.target_size = int(target_size)
+        self.resize_to_square = bool(resize_to_square)
+
+        # ImageNet normalization
+        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+
+        # Freeze
+        for p in self.model.parameters():
+            p.requires_grad_(False)
+        self.model.eval()
+
+        self.feature_dim = self.model.config.hidden_size
+
+    def _prep(self, x: torch.Tensor) -> torch.Tensor:
+        """Preprocess images: [-1,1] -> normalized, optionally resized."""
+        x = (x + 1.0) / 2.0
+
+        B, C, H, W = x.shape
+        if self.resize_to_square:
+            long_side = max(H, W)
+            if long_side > self.target_size:
+                scale = float(self.target_size) / float(long_side)
+                new_h = max(1, int(round(H * scale)))
+                new_w = max(1, int(round(W * scale)))
+                x = F.interpolate(x, size=(new_h, new_w), mode='bicubic', align_corners=False)
+        else:
+            if H > self.target_size or W > self.target_size:
+                crop_h = min(self.target_size, H)
+                crop_w = min(self.target_size, W)
+                h_start = (H - crop_h) // 2
+                w_start = (W - crop_w) // 2
+                x = x[:, :, h_start:h_start+crop_h, w_start:w_start+crop_w]
+
+        x = (x - self.mean) / self.std
+        return x
+
+
+class DINOModel(_DINOBase):
+    """DINO feature extractor for FDD calculation.
+
+    Extracts CLS token features suitable for Frechet distance calculation.
 
     Args:
         model_name: HuggingFace model name. If None, uses model_size to select.
-        model_size: Model size key ('S', 'B', 'L', 'H'). Default 'B'.
+        model_size: Model size key ('S', 'B', 'L', 'G'). Default 'B'.
+        target_size: Target size for preprocessing.
+        resize_to_square: If True, resize to target_size. If False, center crop.
+    """
+
+    def __init__(
+        self,
+        model_name: Optional[str] = None,
+        model_size: str = "B",
+        target_size: int = 512,
+        resize_to_square: bool = False,
+    ):
+        super().__init__(
+            model_name=model_name,
+            model_size=model_size,
+            target_size=target_size,
+            resize_to_square=resize_to_square,
+        )
+
+    def forward(self, x: torch.Tensor):
+        """Extract CLS token features from images.
+
+        Args:
+            x: Tensor of shape (B, C, H, W) in range [-1, 1].
+
+        Returns:
+            features: Tensor of shape (B, feature_dim).
+            None: Placeholder for compatibility.
+        """
+        x = self._prep(x)
+
+        with torch.inference_mode():
+            outputs = self.model(x)
+
+        cls_features = outputs.last_hidden_state[:, 0, :]
+        return cls_features, None
+
+
+class DINOPerceptual(_DINOBase):
+    """DINO-based perceptual loss function.
+
+    Computes an LPIPS-like distance using frozen DINOv2 ViT features:
+    for selected transformer layers, take token-wise features (exclude CLS),
+    L2-normalize per token, compute squared differences between real and fake
+    feature maps, and average only at the very end to a per-image scalar.
+
+    Args:
+        model_name: HuggingFace model name. If None, uses model_size to select.
+        model_size: Model size key ('S', 'B', 'L', 'G'). Default 'B'.
         target_size: Maximum image size. Larger images are downscaled.
         layers: Which layers to use. 'all' or list of 1-based indices.
         normalize: Whether to L2-normalize features per token.
@@ -65,46 +159,14 @@ class DINOv3Perceptual(nn.Module):
         normalize: bool = True,
         resize_to_square: bool = True,
     ):
-        super().__init__()
-        resolved_name = model_name or _resolve_dinov3_model_name(model_size)
-        self.model = AutoModel.from_pretrained(resolved_name)
-        self.model.eval()
-        for p in self.model.parameters():
-            p.requires_grad_(False)
-
-        # Preprocessing
-        self.target_size = int(target_size)
-        self.resize_to_square = bool(resize_to_square)
-        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
-
+        super().__init__(
+            model_name=model_name,
+            model_size=model_size,
+            target_size=target_size,
+            resize_to_square=resize_to_square,
+        )
         self.layers = layers
         self.normalize_feats = bool(normalize)
-
-    def _prep(self, x: torch.Tensor) -> torch.Tensor:
-        """Preprocess images: normalize and optionally resize."""
-        # Expect x in [-1, 1]; map to [0, 1]
-        x = (x + 1.0) / 2.0
-        # Downscale-only resize: if larger than target, shrink while preserving aspect ratio.
-        if self.resize_to_square:
-            B, C, H, W = x.shape
-            long_side = max(H, W)
-            if long_side > self.target_size:
-                scale = float(self.target_size) / float(long_side)
-                new_h = max(1, int(round(H * scale)))
-                new_w = max(1, int(round(W * scale)))
-                x = F.interpolate(x, size=(new_h, new_w), mode='bicubic', align_corners=False)
-        else:
-            B, C, H, W = x.shape
-            if H > self.target_size or W > self.target_size:
-                crop_h = min(self.target_size, H)
-                crop_w = min(self.target_size, W)
-                h_start = (H - crop_h) // 2
-                w_start = (W - crop_w) // 2
-                x = x[:, :, h_start:h_start+crop_h, w_start:w_start+crop_w]
-        # ImageNet norm
-        x = (x - self.mean) / self.std
-        return x
 
     @staticmethod
     def _l2_normalize(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
@@ -114,10 +176,8 @@ class DINOv3Perceptual(nn.Module):
     def _select_layers(self, hidden_states: List[torch.Tensor]) -> List[int]:
         """Select which hidden state layers to use."""
         n_total = len(hidden_states)
-        # We exclude the embedding output (index 0) by default for 'all'
         if isinstance(self.layers, str) and self.layers == 'all':
             return list(range(1, n_total))
-        # Interpret provided as 1-based layer indices
         out = []
         for l in self.layers:
             if not isinstance(l, int) or l < 1 or l >= n_total:
@@ -151,7 +211,6 @@ class DINOv3Perceptual(nn.Module):
             if self.normalize_feats:
                 fp = self._l2_normalize(fp)
                 ft = self._l2_normalize(ft)
-            # LPIPS-like: squared difference, pool at end
             l = (fp - ft).pow(2).mean(dim=(1, 2))
             losses.append(l)
 
