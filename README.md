@@ -138,12 +138,12 @@ Results from training a 4.5B parameter ViTok autoencoder (Td4-T/16×64, 16× spa
 
 | Metric | Pixel-only | + LPIPS (λ=0.1) | + DINO (λ=1000) |
 |--------|------------|-----------------|-----------------|
-| rFID ↓ | 2.13 | 0.72 | **0.30** |
-| rFDD ↓ | 6.96 | 2.93 | **1.12** |
-| PSNR ↑ | **34.31** | 34.19 | 33.64 |
-| SSIM ↑ | **0.925** | 0.923 | 0.914 |
+| rFID ↓ | 6.12 | 0.72 | **0.30** |
+| rFDD ↓ | 12.8 | 2.93 | **1.12** |
+| PSNR ↑ | **34.80** | 34.19 | 33.64 |
+| SSIM ↑ | **0.931** | 0.923 | 0.914 |
 
-DINO perceptual loss achieves **7× better rFID** and **6× better rFDD** compared to pixel-only training, and **2× better** than LPIPS, with only ~0.7 dB PSNR trade-off (invisible to human perception).
+DINO perceptual loss achieves **20× better rFID** and **11× better rFDD** compared to pixel-only training, and **2× better** than LPIPS, with only ~1.2 dB PSNR trade-off (negligible to human perception).
 
 ## API Reference
 
