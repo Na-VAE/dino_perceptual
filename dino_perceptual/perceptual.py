@@ -1,13 +1,13 @@
 """DINO-based perceptual loss and feature extraction.
 
 Provides:
-- DINOPerceptual: LPIPS-like perceptual loss using DINOv2 features
+- DINOPerceptual: LPIPS-like perceptual loss using DINO features (v2 or v3)
 - DINOModel: Feature extractor for FDD (Frechet DINO Distance)
 
 Usage:
     from dino_perceptual import DINOPerceptual, DINOModel
 
-    # Perceptual loss
+    # Perceptual loss (uses DINOv3 by default)
     loss_fn = DINOPerceptual(model_size="B", target_size=512)
     loss = loss_fn(pred_images, ref_images).mean()
 
@@ -16,23 +16,43 @@ Usage:
     features, _ = extractor(images)  # images in [-1, 1]
 """
 
-from typing import List, Sequence, Union, Optional
+from typing import List, Sequence, Union, Optional, Literal
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoModel
 
 
-def _resolve_model_name(model_size: str) -> str:
-    """Map a size key to a DINOv2 HF model name."""
+# DINOv3 models (default) - trained on LVD-1689M with modern ViT architecture
+DINOV3_MODELS = {
+    'S': 'facebook/dinov3-vits16-pretrain-lvd1689m',
+    'B': 'facebook/dinov3-vitb16-pretrain-lvd1689m',
+    'L': 'facebook/dinov3-vitl16-pretrain-lvd1689m',
+    'H': 'facebook/dinov3-vith16plus-pretrain-lvd1689m',
+    'G': 'facebook/dinov3-vit7b16-pretrain-lvd1689m',
+}
+
+# DINOv2 models (legacy)
+DINOV2_MODELS = {
+    'S': 'facebook/dinov2-small',
+    'B': 'facebook/dinov2-base',
+    'L': 'facebook/dinov2-large',
+    'G': 'facebook/dinov2-giant',
+}
+
+
+def _resolve_model_name(model_size: str, version: str = "v3") -> str:
+    """Map a size key to a DINO HF model name.
+
+    Args:
+        model_size: Size key ('S', 'B', 'L', 'H', 'G')
+        version: DINO version ('v2' or 'v3'). Default 'v3'.
+    """
     key = str(model_size).strip().upper()
-    mapping = {
-        'S': 'facebook/dinov2-small',
-        'B': 'facebook/dinov2-base',
-        'L': 'facebook/dinov2-large',
-        'G': 'facebook/dinov2-giant',
-    }
-    return mapping.get(key, mapping['B'])
+    if version == "v2":
+        return DINOV2_MODELS.get(key, DINOV2_MODELS['B'])
+    else:
+        return DINOV3_MODELS.get(key, DINOV3_MODELS['B'])
 
 
 class _DINOBase(nn.Module):
@@ -42,13 +62,15 @@ class _DINOBase(nn.Module):
         self,
         model_name: Optional[str] = None,
         model_size: str = "B",
+        version: str = "v3",
         target_size: int = 512,
         resize_to_square: bool = True,
     ):
         super().__init__()
-        resolved_name = model_name or _resolve_model_name(model_size)
+        resolved_name = model_name or _resolve_model_name(model_size, version)
         self.model = AutoModel.from_pretrained(resolved_name)
         self.model_name = resolved_name
+        self.version = version
 
         self.target_size = int(target_size)
         self.resize_to_square = bool(resize_to_square)
@@ -95,7 +117,8 @@ class DINOModel(_DINOBase):
 
     Args:
         model_name: HuggingFace model name. If None, uses model_size to select.
-        model_size: Model size key ('S', 'B', 'L', 'G'). Default 'B'.
+        model_size: Model size key ('S', 'B', 'L', 'H', 'G'). Default 'B'.
+        version: DINO version ('v2' or 'v3'). Default 'v3'.
         target_size: Target size for preprocessing.
         resize_to_square: If True, resize to target_size. If False, center crop.
     """
@@ -104,12 +127,14 @@ class DINOModel(_DINOBase):
         self,
         model_name: Optional[str] = None,
         model_size: str = "B",
+        version: str = "v3",
         target_size: int = 512,
         resize_to_square: bool = False,
     ):
         super().__init__(
             model_name=model_name,
             model_size=model_size,
+            version=version,
             target_size=target_size,
             resize_to_square=resize_to_square,
         )
@@ -136,14 +161,15 @@ class DINOModel(_DINOBase):
 class DINOPerceptual(_DINOBase):
     """DINO-based perceptual loss function.
 
-    Computes an LPIPS-like distance using frozen DINOv2 ViT features:
+    Computes an LPIPS-like distance using frozen DINO ViT features:
     for selected transformer layers, take token-wise features (exclude CLS),
     L2-normalize per token, compute squared differences between real and fake
     feature maps, and average only at the very end to a per-image scalar.
 
     Args:
         model_name: HuggingFace model name. If None, uses model_size to select.
-        model_size: Model size key ('S', 'B', 'L', 'G'). Default 'B'.
+        model_size: Model size key ('S', 'B', 'L', 'H', 'G'). Default 'B'.
+        version: DINO version ('v2' or 'v3'). Default 'v3'.
         target_size: Maximum image size. Larger images are downscaled.
         layers: Which layers to use. 'all' or list of 1-based indices.
         normalize: Whether to L2-normalize features per token.
@@ -154,6 +180,7 @@ class DINOPerceptual(_DINOBase):
         self,
         model_name: Optional[str] = None,
         model_size: str = "B",
+        version: str = "v3",
         target_size: int = 512,
         layers: Union[str, Sequence[int]] = "all",
         normalize: bool = True,
@@ -162,6 +189,7 @@ class DINOPerceptual(_DINOBase):
         super().__init__(
             model_name=model_name,
             model_size=model_size,
+            version=version,
             target_size=target_size,
             resize_to_square=resize_to_square,
         )

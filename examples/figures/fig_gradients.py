@@ -36,8 +36,8 @@ def generate_figure():
 
     device = torch.device("cuda")
 
-    # Load models
-    dino = DINOPerceptual(model_size="B").to(device).eval()
+    # Load models (use v2 for broader compatibility)
+    dino = DINOPerceptual(model_size="B", version="v2").to(device).eval()
     lpips_fn = lpips.LPIPS(net="vgg").to(device).eval()
 
     # Load image

@@ -1,15 +1,17 @@
 """Example: Using DINOPerceptual as a training loss.
 
 Shows how to use DINO perceptual loss in a typical training loop.
+Uses DINOv3 by default with bfloat16 and torch.compile for best performance.
 """
 
 import torch
 import torch.nn as nn
 from dino_perceptual import DINOPerceptual
 
-# Initialize the perceptual loss
+# Initialize the perceptual loss (uses DINOv3 by default)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-perceptual_loss = DINOPerceptual(model_size="B").to(device).eval()
+perceptual_loss = DINOPerceptual(model_size="B").to(device).bfloat16().eval()
+perceptual_loss = torch.compile(perceptual_loss, fullgraph=True)
 
 # Example: Simple autoencoder training
 class SimpleAutoencoder(nn.Module):

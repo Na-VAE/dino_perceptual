@@ -1,6 +1,8 @@
 # DINO Perceptual Loss
 
-A drop-in replacement for LPIPS using DINOv2 features. Achieves better perceptual quality metrics (rFID, FDD) than VGG-based LPIPS while being simpler and more robust.
+A drop-in replacement for LPIPS using DINOv3 features. Achieves better perceptual quality metrics (rFID, FDD) than VGG-based LPIPS while being simpler and more robust.
+
+**Why DINO over VGG?** DINOv3 is trained with self-supervised learning on 1.7B images using modern Vision Transformer architectures. This produces richer, more semantically meaningful features compared to VGG-16's classification-focused features from 2014. The result: **2x better perceptual metrics** with the same training setup.
 
 ## Installation
 
@@ -19,14 +21,19 @@ pip install -e .
 ## Quick Start
 
 ```python
+import torch
 from dino_perceptual import DINOPerceptual
 
-# Initialize loss function
-loss_fn = DINOPerceptual(model_size="B").cuda().eval()
+# Initialize loss function (uses DINOv3 by default)
+loss_fn = DINOPerceptual(model_size="B").cuda().bfloat16().eval()
+loss_fn = torch.compile(loss_fn, fullgraph=True)
 
 # Compute perceptual loss between two images
 # Images should be tensors in [-1, 1] range with shape (B, 3, H, W)
 loss = loss_fn(predicted, target).mean()
+
+# Use DINOv2 instead (legacy)
+loss_fn_v2 = DINOPerceptual(model_size="B", version="v2").cuda().eval()
 ```
 
 ## Usage in Autoencoder Training
@@ -37,13 +44,14 @@ import torch.nn as nn
 from dino_perceptual import DINOPerceptual
 
 # Initialize models
-autoencoder = MyAutoencoder().cuda()
-perceptual_loss = DINOPerceptual(model_size="B").cuda().eval()
+autoencoder = MyAutoencoder().cuda().bfloat16()
+perceptual_loss = DINOPerceptual(model_size="B").cuda().bfloat16().eval()
+perceptual_loss = torch.compile(perceptual_loss, fullgraph=True)
 optimizer = torch.optim.Adam(autoencoder.parameters(), lr=1e-4)
 
 # Training loop
 for images in dataloader:
-    images = images.cuda()
+    images = images.cuda().bfloat16()
 
     # Forward pass
     reconstructed = autoencoder(images)
@@ -77,14 +85,16 @@ DINO perceptual loss achieves **7x better rFID** and **6x better rFDD** compared
 
 ```python
 DINOPerceptual(
-    model_size: str = "B",      # "S", "B", "L", or "G"
+    model_size: str = "B",      # "S", "B", "L", "H", or "G"
+    version: str = "v3",        # "v2" or "v3" (default: v3)
     target_size: int = 512,     # Resize images to this size
     layers: str = "all",        # Which transformer layers to use
 )
 ```
 
 **Arguments:**
-- `model_size`: DINOv2 model variant. "B" (base) is recommended for most use cases.
+- `model_size`: DINO model variant. "B" (base) is recommended for most use cases.
+- `version`: DINO version. "v3" (default) uses the latest models trained on 1.7B images. "v2" for legacy compatibility.
 - `target_size`: Images are resized to this size before computing features.
 - `layers`: Which transformer layers to extract features from. "all" uses all layers.
 
@@ -101,8 +111,8 @@ For feature extraction (e.g., computing FDD):
 ```python
 from dino_perceptual import DINOModel
 
-extractor = DINOModel(model_size="B").cuda().eval()
-features, cls_token = extractor(images)  # features: (B, num_patches, dim)
+extractor = DINOModel(model_size="B").cuda().bfloat16().eval()
+features, cls_token = extractor(images)  # features: (B, feature_dim)
 ```
 
 ## License

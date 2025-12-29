@@ -138,7 +138,7 @@
 <body>
 
 <h1>DINO Perceptual Loss</h1>
-<p class="subtitle">A better alternative to LPIPS for training image autoencoders and generative models</p>
+<p class="subtitle">A better alternative to LPIPS using DINOv3 features for training image autoencoders and generative models</p>
 
 <div class="install-box">
     <strong>Quick Install:</strong>
@@ -171,9 +171,17 @@
     <li>VGG was trained for classification, not perceptual similarity</li>
     <li>Requires downloading separate pretrained weights</li>
     <li>Limited to fixed input sizes (224x224 native)</li>
+    <li>Uses outdated CNN architecture (no attention mechanisms)</li>
 </ul>
 
-<p><strong>DINOv2</strong> is a modern self-supervised vision transformer that learns rich visual features without labels. Its features naturally capture semantic similarity&mdash;making it ideal for perceptual loss.</p>
+<p><strong>DINOv3</strong> is Meta's latest self-supervised vision foundation model (2025), trained on 1.7 billion images using modern Vision Transformer architectures. Key advantages:</p>
+
+<ul style="margin: 1rem 0 1rem 1.5rem;">
+    <li><strong>Modern architecture:</strong> Vision Transformers with attention, not 2014 CNNs</li>
+    <li><strong>Massive scale:</strong> Trained on 1.7B images vs VGG's 1.2M ImageNet images</li>
+    <li><strong>Self-supervised:</strong> Learns visual structure, not classification labels</li>
+    <li><strong>Rich features:</strong> Produces semantically meaningful representations naturally</li>
+</ul>
 
 <div class="callout">
     <strong>Key finding:</strong> Replacing LPIPS with DINO loss achieves <strong>2x better perceptual metrics</strong> (rFID, FDD) with no additional complexity.
@@ -248,15 +256,35 @@
     <li><strong>LPIPS gradient:</strong> Similar pattern but less pronounced than DINO</li>
 </ul>
 
+<h3>Gradient Overlay</h3>
+
+<p>We can also overlay these gradients on the image to see exactly which regions each loss prioritizes:</p>
+
+<figure>
+    <img src="fig_gradient_overlay.png" alt="Gradient overlay visualization">
+    <figcaption>Gradient magnitude overlaid on the distorted image. Bright regions indicate where the loss applies the strongest correction signal.</figcaption>
+</figure>
+
+<h3>Across Different Distortions</h3>
+
+<p>Different distortion types (blur, noise, JPEG compression, color shift) reveal different gradient patterns:</p>
+
+<figure>
+    <img src="fig_distortions.png" alt="Gradient comparison across distortion types">
+    <figcaption>Gradient saliency across four distortion types. DINO consistently focuses on semantically meaningful regions regardless of distortion type.</figcaption>
+</figure>
+
 <h2>Usage</h2>
 
 <p>Using DINO perceptual loss is straightforward:</p>
 
-<pre><code><span class="keyword">from</span> dino_perceptual <span class="keyword">import</span> DINOPerceptual
+<pre><code><span class="keyword">import</span> torch
+<span class="keyword">from</span> dino_perceptual <span class="keyword">import</span> DINOPerceptual
 <span class="keyword">import</span> torch.nn <span class="keyword">as</span> nn
 
-<span class="comment"># Initialize</span>
-perceptual_loss = DINOPerceptual(model_size=<span class="string">"B"</span>).cuda().eval()
+<span class="comment"># Initialize with bfloat16 and torch.compile for best performance</span>
+perceptual_loss = DINOPerceptual(model_size=<span class="string">"B"</span>).cuda().bfloat16().eval()
+perceptual_loss = torch.compile(perceptual_loss, fullgraph=<span class="keyword">True</span>)
 
 <span class="comment"># In your training loop</span>
 reconstructed = autoencoder(images)
@@ -267,7 +295,7 @@ dino_loss = perceptual_loss(reconstructed, images).mean()
 <span class="comment"># Combined loss (weight 250-1000 for DINO)</span>
 total_loss = l1_loss + <span class="number">250.0</span> * dino_loss</code></pre>
 
-<p>The DINO model is automatically downloaded from HuggingFace on first use. Images should be tensors in <code>[-1, 1]</code> range.</p>
+<p>The DINO model is automatically downloaded from HuggingFace on first use. Images should be tensors in <code>[-1, 1]</code> range. Use <code>version="v2"</code> for legacy DINOv2 models.</p>
 
 <h2>Installation</h2>
 
