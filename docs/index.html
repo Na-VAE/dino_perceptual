@@ -310,6 +310,33 @@ cd dino-perceptual
 pip install -e .</code></pre>
 </div>
 
+<h3>HuggingFace Access Setup</h3>
+
+<p>DINOv3 and DINOv2 models are hosted on HuggingFace and require accepting the model license:</p>
+
+<ol style="margin: 1rem 0 1rem 1.5rem;">
+    <li><strong>Accept the license:</strong> Visit the model page (<a href="https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m">DINOv3</a> or <a href="https://huggingface.co/facebook/dinov2-base">DINOv2</a>) and click "Agree and access repository"</li>
+    <li><strong>Create a token:</strong> Go to <a href="https://huggingface.co/settings/tokens">HuggingFace Settings</a> and create a "Read" access token</li>
+    <li><strong>Authenticate:</strong> Use one of the methods below</li>
+</ol>
+
+<pre><code><span class="comment"># Option A: Environment variable</span>
+export HF_TOKEN=<span class="string">"hf_your_token_here"</span>
+
+<span class="comment"># Option B: HuggingFace CLI</span>
+huggingface-cli login
+
+<span class="comment"># Option C: In Python</span>
+<span class="keyword">from</span> huggingface_hub <span class="keyword">import</span> login
+login(token=<span class="string">"hf_your_token_here"</span>)</code></pre>
+
+<p>For <strong>Modal</strong> deployments, create a secret and reference it:</p>
+
+<pre><code><span class="comment"># Create secret: modal secret create huggingface HF_TOKEN=hf_...</span>
+@app.function(secrets=[modal.Secret.from_name(<span class="string">"huggingface"</span>)], gpu=<span class="string">"A10G"</span>)
+<span class="keyword">def</span> run():
+    loss_fn = DINOPerceptual().cuda()  <span class="comment"># HF_TOKEN auto-loaded</span></code></pre>
+
 <h2>Citation</h2>
 
 <pre><code>@software{dino_perceptual,
