@@ -36,6 +36,12 @@
         .subtitle {
             color: #666;
             font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .author {
+            color: #888;
+            font-size: 0.95rem;
             margin-bottom: 2rem;
         }
 
@@ -47,26 +53,6 @@
             border-radius: 4px;
             font-size: 0.9em;
         }
-
-        pre {
-            background: #1e293b;
-            color: #e2e8f0;
-            padding: 1.25rem;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin: 1rem 0 1.5rem;
-        }
-
-        pre code {
-            background: none;
-            padding: 0;
-            color: inherit;
-        }
-
-        .keyword { color: #c084fc; }
-        .string { color: #4ade80; }
-        .comment { color: #64748b; }
-        .number { color: #fb923c; }
 
         table {
             width: 100%;
@@ -87,23 +73,6 @@
         .worse { color: var(--red); }
         .best { background: #dcfce7; }
 
-        figure {
-            margin: 2rem 0;
-        }
-
-        figure img {
-            width: 100%;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-        }
-
-        figcaption {
-            text-align: center;
-            color: #666;
-            font-size: 0.9rem;
-            margin-top: 0.75rem;
-        }
-
         .callout {
             background: #eff6ff;
             border-left: 4px solid var(--accent);
@@ -118,14 +87,6 @@
             font-style: italic;
         }
 
-        .install-box {
-            background: var(--code-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-        }
-
         footer {
             margin-top: 4rem;
             padding-top: 2rem;
@@ -138,12 +99,8 @@
 <body>
 
 <h1>DINO Perceptual Loss</h1>
-<p class="subtitle">A better alternative to LPIPS using DINOv3 features for training image autoencoders and generative models</p>
-
-<div class="install-box">
-    <strong>Quick Install:</strong>
-    <pre><code>pip install dino-perceptual</code></pre>
-</div>
+<p class="subtitle">A better alternative to LPIPS for training image autoencoders and generative models</p>
+<p class="author">Philippe Hansen-Estruch</p>
 
 <h2>Background: What are Perceptual Losses?</h2>
 
@@ -161,7 +118,7 @@
 
 <p>where &phi; extracts features from intermediate layers of a pretrained network. This captures high-level structure (edges, textures, semantics) rather than exact pixel values.</p>
 
-<p>The most popular implementation is <strong>LPIPS</strong> (Learned Perceptual Image Patch Similarity), which uses VGG features with learned weights to match human perceptual judgments.</p>
+<p>The most popular implementation is <strong>LPIPS</strong> (Learned Perceptual Image Patch Similarity) <a href="#ref-lpips">[5]</a>, which uses VGG features with learned weights to match human perceptual judgments.</p>
 
 <h2>Why DINO Instead of LPIPS?</h2>
 
@@ -169,29 +126,43 @@
 
 <ul style="margin: 1rem 0 1rem 1.5rem;">
     <li>VGG was trained for classification, not perceptual similarity</li>
-    <li>Requires downloading separate pretrained weights</li>
     <li>Limited to fixed input sizes (224x224 native)</li>
     <li>Uses outdated CNN architecture (no attention mechanisms)</li>
+    <li>Trained on only 1.2M ImageNet images</li>
 </ul>
 
-<p><strong>DINOv3</strong> is Meta's latest self-supervised vision foundation model (2025), trained on 1.7 billion images using modern Vision Transformer architectures. Key advantages:</p>
+<p><strong>DINOv2</strong> <a href="#ref-dino">[6]</a> and <strong>DINOv3</strong> <a href="#ref-dinov3">[7]</a> are Meta's self-supervised vision foundation models, trained on up to 1.7 billion images using modern Vision Transformer architectures. Key advantages:</p>
 
 <ul style="margin: 1rem 0 1rem 1.5rem;">
     <li><strong>Modern architecture:</strong> Vision Transformers with attention, not 2014 CNNs</li>
     <li><strong>Massive scale:</strong> Trained on 1.7B images vs VGG's 1.2M ImageNet images</li>
-    <li><strong>Self-supervised:</strong> Learns visual structure, not classification labels</li>
+    <li><strong>Self-supervised:</strong> Learns visual structure through self-distillation, not classification labels</li>
     <li><strong>Rich features:</strong> Produces semantically meaningful representations naturally</li>
 </ul>
 
 <div class="callout">
-    <strong>Key finding:</strong> Replacing LPIPS with DINO loss achieves <strong>2x better perceptual metrics</strong> (rFID, FDD) with no additional complexity.
+    <strong>Key finding:</strong> Replacing LPIPS with DINO loss achieves <strong>2&times; better perceptual metrics</strong> (rFID, rFDD) with no additional complexity.
 </div>
+
+<h2>Related Work</h2>
+
+<h3>Perceptual Loss Functions</h3>
+
+<p>Johnson et al. <a href="#ref-johnson">[8]</a> introduced perceptual losses using VGG features for style transfer and super-resolution. Zhang et al. <a href="#ref-lpips">[5]</a> extended this with LPIPS, learning weights on VGG features to better match human perception. These approaches established perceptual losses as essential for generative models.</p>
+
+<h3>Self-Supervised Visual Representations</h3>
+
+<p>DINO <a href="#ref-dino-v1">[9]</a> demonstrated that self-supervised Vision Transformers learn semantically meaningful features without labels. DINOv2 <a href="#ref-dino">[6]</a> scaled this to 1.7B images with improved training recipes. DINOv3 <a href="#ref-dinov3">[7]</a> further refined the approach with modern architectural improvements. These models produce features that naturally capture perceptual similarity.</p>
+
+<h3>Visual Tokenizers for Generative Models</h3>
+
+<p>Latent diffusion models <a href="#ref-ldm">[1]</a> popularized the use of autoencoders to compress images into latent spaces for efficient generation. Recent work has explored scaling these tokenizers: FLUX <a href="#ref-flux">[4]</a> uses high-capacity VAEs, while ViTok <a href="#ref-vitok">[10]</a> demonstrates benefits of Vision Transformer architectures for tokenization. Our work shows that the choice of perceptual loss is equally important as architectural improvements.</p>
 
 <h2>Empirical Results</h2>
 
 <h3>Comparison with State-of-the-Art VAEs</h3>
 
-<p>Reconstruction quality on <strong>ImageNet 256&times;256</strong> (center crop). ViTok-v2 models trained with <strong>DINO perceptual loss (no GAN)</strong> achieve state-of-the-art results using only L1 + DINO + scaling losses:</p>
+<p>Reconstruction quality on <strong>ImageNet 256&times;256</strong> (center crop). ViTok-v2 models trained with <strong>DINO perceptual loss (no GAN)</strong> achieve state-of-the-art results:</p>
 
 <table>
     <thead>
@@ -246,7 +217,7 @@
             <td>0.904</td>
         </tr>
         <tr style="background: #f0fdf4;">
-            <td><strong>ViTok-v2 Td4-T/16&times;16</strong></td>
+            <td><strong>ViTok-v2 16&times;16</strong></td>
             <td>f16&times;16ch</td>
             <td>1.32</td>
             <td>3.13</td>
@@ -254,7 +225,7 @@
             <td>0.793</td>
         </tr>
         <tr style="background: #f0fdf4;">
-            <td><strong>ViTok-v2 Td4-T/16&times;32</strong></td>
+            <td><strong>ViTok-v2 16&times;32</strong></td>
             <td>f16&times;32ch</td>
             <td>1.06</td>
             <td>2.36</td>
@@ -262,7 +233,7 @@
             <td>0.867</td>
         </tr>
         <tr style="background: #dcfce7;">
-            <td><strong>ViTok-v2 Td4-T/16&times;64</strong></td>
+            <td><strong>ViTok-v2 16&times;64</strong></td>
             <td>f16&times;64ch</td>
             <td>0.64</td>
             <td class="best"><strong>1.70</strong></td>
@@ -276,11 +247,11 @@
     <strong>No GAN required:</strong> ViTok-v2 achieves these results using only L1 (Charbonnier) + DINO perceptual loss + scaling losses (SSIM, FFT). No adversarial training needed, which simplifies training and improves stability.
 </div>
 
-<p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">*Self-reproduced results. ViTok uses 4&times; fewer tokens (256 vs 1024) than f8-based methods, enabling faster diffusion training. All ViTok-v2 models are 4.5B parameters (Td4-T configuration).</p>
+<p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">*Self-reproduced results. ViTok uses 4&times; fewer tokens (256 vs 1024) than f8-based methods, enabling faster diffusion training. All ViTok-v2 models are 4.5B parameters.</p>
 
 <h3>Loss Ablation</h3>
 
-<p>Effect of different loss configurations on our <strong>4.5B parameter ViTok-v2 autoencoder</strong> (Td4-T/16&times;64):</p>
+<p>Effect of different loss configurations on our <strong>4.5B parameter ViTok-v2 autoencoder</strong>:</p>
 
 <table>
     <thead>
@@ -326,79 +297,11 @@
 
 <p>DINO achieves <strong>7&times; better rFID</strong> and <strong>6&times; better rFDD</strong> than pixel-only, and <strong>2&times; better</strong> than LPIPS, with only ~0.7 dB PSNR trade-off.</p>
 
-<h2>Usage</h2>
+<h2>Conclusion</h2>
 
-<p>Using DINO perceptual loss is straightforward:</p>
+<p>DINO perceptual loss offers a simple drop-in replacement for LPIPS that leverages modern self-supervised visual representations. By using features from models trained on billions of images with Vision Transformer architectures, we achieve substantially better perceptual quality metrics without requiring adversarial training or complex loss balancing.</p>
 
-<pre><code><span class="keyword">import</span> torch
-<span class="keyword">from</span> dino_perceptual <span class="keyword">import</span> DINOPerceptual
-<span class="keyword">import</span> torch.nn <span class="keyword">as</span> nn
-
-<span class="comment"># Initialize with bfloat16 and torch.compile for best performance</span>
-perceptual_loss = DINOPerceptual(model_size=<span class="string">"B"</span>).cuda().bfloat16().eval()
-perceptual_loss = torch.compile(perceptual_loss, fullgraph=<span class="keyword">True</span>)
-
-<span class="comment"># In your training loop</span>
-reconstructed = autoencoder(images)
-
-l1_loss = nn.functional.l1_loss(reconstructed, images)
-dino_loss = perceptual_loss(reconstructed, images).mean()
-
-<span class="comment"># Combined loss (weight 250-1000 for DINO)</span>
-total_loss = l1_loss + <span class="number">250.0</span> * dino_loss</code></pre>
-
-<p>The DINO model is automatically downloaded from HuggingFace on first use. Images should be tensors in <code>[-1, 1]</code> range. Use <code>version="v2"</code> for legacy DINOv2 models.</p>
-
-<h2>Installation</h2>
-
-<div class="install-box">
-<pre><code><span class="comment"># From PyPI</span>
-pip install dino-perceptual
-
-<span class="comment"># From source</span>
-git clone https://github.com/Na-VAE/dino-perceptual.git
-cd dino-perceptual
-pip install -e .</code></pre>
-</div>
-
-<h3>HuggingFace Access Setup</h3>
-
-<p>DINOv3 and DINOv2 models are hosted on HuggingFace and require accepting the model license:</p>
-
-<ol style="margin: 1rem 0 1rem 1.5rem;">
-    <li><strong>Accept the license:</strong> Visit the model page (<a href="https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m">DINOv3</a> or <a href="https://huggingface.co/facebook/dinov2-base">DINOv2</a>) and click "Agree and access repository"</li>
-    <li><strong>Create a token:</strong> Go to <a href="https://huggingface.co/settings/tokens">HuggingFace Settings</a> and create a "Read" access token</li>
-    <li><strong>Authenticate:</strong> Use one of the methods below</li>
-</ol>
-
-<pre><code><span class="comment"># Option A: Environment variable</span>
-export HF_TOKEN=<span class="string">"hf_your_token_here"</span>
-
-<span class="comment"># Option B: HuggingFace CLI</span>
-huggingface-cli login
-
-<span class="comment"># Option C: In Python</span>
-<span class="keyword">from</span> huggingface_hub <span class="keyword">import</span> login
-login(token=<span class="string">"hf_your_token_here"</span>)</code></pre>
-
-<p>For <strong>Modal</strong> deployments, create a secret and reference it:</p>
-
-<pre><code><span class="comment"># Create secret: modal secret create huggingface HF_TOKEN=hf_...</span>
-@app.function(secrets=[modal.Secret.from_name(<span class="string">"huggingface"</span>)], gpu=<span class="string">"A10G"</span>)
-<span class="keyword">def</span> run():
-    loss_fn = DINOPerceptual().cuda()  <span class="comment"># HF_TOKEN auto-loaded</span></code></pre>
-
-<h2>Citation</h2>
-
-<pre><code>@software{dino_perceptual,
-  title={DINO Perceptual Loss},
-  author={Hansen-Estruch, Philippe and Chen, Jiahui and Ramanujan, Vivek
-          and Zohar, Orr and Ping, Yan and Sinha, Animesh and Georgopoulos,
-          Markos and Schoenfeld, Edgar and Hou, Ji and Juefei-Xu, Felix
-          and Vishwanath, Sriram and Thabet, Ali},
-  year={2025},
-  url={https://github.com/Na-VAE/dino-perceptual}
-}</code></pre>
+<p>The code is available at <a href="https://github.com/Na-VAE/dino-perceptual">github.com/Na-VAE/dino-perceptual</a>.</p>
 
 <h2>References</h2>
 
@@ -409,6 +312,10 @@ login(token=<span class="string">"hf_your_token_here"</span>)</code></pre>
     <li id="ref-flux">Black Forest Labs. "FLUX.1" 2024. <a href="https://blackforestlabs.ai/">blackforestlabs.ai</a></li>
     <li id="ref-lpips">Zhang et al. "The Unreasonable Effectiveness of Deep Features as a Perceptual Metric." CVPR 2018. <a href="https://arxiv.org/abs/1801.03924">arXiv:1801.03924</a></li>
     <li id="ref-dino">Oquab et al. "DINOv2: Learning Robust Visual Features without Supervision." TMLR 2024. <a href="https://arxiv.org/abs/2304.07193">arXiv:2304.07193</a></li>
+    <li id="ref-dinov3">Simeoni et al. "DINOv3: Towards Scalable Self-Supervised Visual Representation Learning." 2025.</li>
+    <li id="ref-johnson">Johnson et al. "Perceptual Losses for Real-Time Style Transfer and Super-Resolution." ECCV 2016. <a href="https://arxiv.org/abs/1603.08155">arXiv:1603.08155</a></li>
+    <li id="ref-dino-v1">Caron et al. "Emerging Properties in Self-Supervised Vision Transformers." ICCV 2021. <a href="https://arxiv.org/abs/2104.14294">arXiv:2104.14294</a></li>
+    <li id="ref-vitok">Hansen-Estruch et al. "ViTok: Learning to Scale Visual Tokenizers." 2025.</li>
 </ol>
 
 <footer>
