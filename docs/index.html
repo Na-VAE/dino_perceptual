@@ -189,7 +189,7 @@
 
 <h2>Empirical Results</h2>
 
-<p>We ablated different loss configurations when training a vision transformer autoencoder (ViTok). All experiments use the same Td4-T architecture with Charbonnier pixel loss as the baseline:</p>
+<p>We ablated different loss configurations when training a <strong>4.5B parameter ViTok autoencoder</strong> (Td4-T/16&times;64: 16&times; spatial compression, 64 latent channels) on ImageNet. All experiments use Charbonnier pixel loss as the baseline:</p>
 
 <table>
     <thead>
@@ -203,31 +203,31 @@
     </thead>
     <tbody>
         <tr>
-            <td><em>Baseline (pixel only)</em></td>
+            <td><em>Pixel-only (Charbonnier)</em></td>
             <td>2.13</td>
             <td>6.96</td>
             <td class="best">34.31</td>
-            <td class="best">0.927</td>
+            <td class="best">0.925</td>
         </tr>
         <tr>
             <td>+ LPIPS (&lambda;=0.1)</td>
-            <td>0.72 <span class="better">(-1.41)</span></td>
-            <td>2.93 <span class="better">(-4.03)</span></td>
+            <td>0.72 <span class="better">(-66%)</span></td>
+            <td>2.93 <span class="better">(-58%)</span></td>
             <td>34.19</td>
             <td>0.923</td>
         </tr>
         <tr>
             <td>+ DINO (&lambda;=250)</td>
-            <td>0.51 <span class="better">(-1.62)</span></td>
-            <td>1.45 <span class="better">(-5.51)</span></td>
+            <td>0.51 <span class="better">(-76%)</span></td>
+            <td>1.45 <span class="better">(-79%)</span></td>
             <td>33.93</td>
             <td>0.919</td>
         </tr>
         <tr style="background: #f0fdf4;">
             <td><strong>+ DINO (&lambda;=1000)</strong></td>
-            <td class="best"><strong>0.30</strong> <span class="better">(-1.83)</span></td>
-            <td class="best"><strong>1.12</strong> <span class="better">(-5.84)</span></td>
-            <td>33.64 <span class="worse">(-0.67)</span></td>
+            <td class="best"><strong>0.30</strong> <span class="better">(-86%)</span></td>
+            <td class="best"><strong>1.12</strong> <span class="better">(-84%)</span></td>
+            <td>33.64 <span class="worse">(-0.67 dB)</span></td>
             <td>0.914</td>
         </tr>
     </tbody>
@@ -235,8 +235,9 @@
 
 <p><strong>Key observations:</strong></p>
 <ul style="margin: 1rem 0 1rem 1.5rem;">
-    <li>DINO achieves <strong>7x better rFID</strong> (0.30 vs 2.13) compared to pixel-only</li>
-    <li>DINO achieves <strong>2x better rFID</strong> than LPIPS (0.30 vs 0.72)</li>
+    <li>DINO achieves <strong>7&times; better rFID</strong> (0.30 vs 2.13) compared to pixel-only</li>
+    <li>DINO achieves <strong>6&times; better rFDD</strong> (1.12 vs 6.96) compared to pixel-only</li>
+    <li>DINO achieves <strong>2&times; better</strong> perceptual metrics than LPIPS</li>
     <li>The cost is only 0.67 dB PSNR&mdash;invisible to human perception</li>
     <li>Higher DINO weight trades more PSNR for better perceptual metrics</li>
 </ul>

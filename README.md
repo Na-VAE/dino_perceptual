@@ -71,13 +71,16 @@ for images in dataloader:
 
 ## Why DINO over LPIPS?
 
-| Metric | Pixel-only | + LPIPS | + DINO |
-|--------|------------|---------|--------|
-| rFID | 2.13 | 0.72 | **0.30** |
-| rFDD | 6.96 | 2.93 | **1.12** |
-| PSNR | **34.31** | 34.19 | 33.64 |
+Results from training a 4.5B parameter ViTok autoencoder (Td4-T/16×64, 16× spatial compression, 64 latent channels) on ImageNet:
 
-DINO perceptual loss achieves **7x better rFID** and **6x better rFDD** compared to pixel-only training, and **2x better** than LPIPS, with only ~0.7 dB PSNR trade-off.
+| Metric | Pixel-only | + LPIPS (λ=0.1) | + DINO (λ=1000) |
+|--------|------------|-----------------|-----------------|
+| rFID ↓ | 2.13 | 0.72 | **0.30** |
+| rFDD ↓ | 6.96 | 2.93 | **1.12** |
+| PSNR ↑ | **34.31** | 34.19 | 33.64 |
+| SSIM ↑ | **0.925** | 0.923 | 0.914 |
+
+DINO perceptual loss achieves **7× better rFID** and **6× better rFDD** compared to pixel-only training, and **2× better** than LPIPS, with only ~0.7 dB PSNR trade-off (invisible to human perception).
 
 ## API Reference
 

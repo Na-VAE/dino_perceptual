@@ -48,8 +48,8 @@ def generate_figure():
             original_pil = img.resize((512, 512), Image.LANCZOS)
             break
 
-    # Create distorted version (blur)
-    distorted_pil = original_pil.filter(ImageFilter.GaussianBlur(radius=4))
+    # Create distorted version (strong blur for visibility)
+    distorted_pil = original_pil.filter(ImageFilter.GaussianBlur(radius=8))
 
     def pil_to_tensor(img):
         return torch.from_numpy(np.array(img)).permute(2, 0, 1).float() / 127.5 - 1
@@ -64,16 +64,25 @@ def generate_figure():
         else:
             loss = loss_fn(x, ref).mean()
         loss.backward()
-        return x.grad.detach()
+        grad = x.grad.detach()
+        # Normalize gradient to unit norm (all on same scale)
+        grad_norm = torch.linalg.vector_norm(grad)
+        return grad / (grad_norm + 1e-8)
 
-    # Compute gradients
+    # Compute gradients (all normalized to same scale)
     l1_grad = get_gradient(None, distorted_t, original_t, is_l1=True)
     dino_grad = get_gradient(dino, distorted_t, original_t)
     lpips_grad = get_gradient(lpips_fn, distorted_t, original_t)
 
     def grad_to_heatmap(grad):
         mag = torch.sqrt((grad ** 2).sum(dim=1)).squeeze().cpu().numpy()
-        return mag / (mag.max() + 1e-8)
+        return mag
+
+    # Get magnitudes and shared max for consistent scale
+    l1_mag = grad_to_heatmap(l1_grad)
+    dino_mag = grad_to_heatmap(dino_grad)
+    lpips_mag = grad_to_heatmap(lpips_grad)
+    shared_max = max(l1_mag.max(), dino_mag.max(), lpips_mag.max())
 
     def overlay_heatmap(img_arr, heatmap, alpha=0.6, cmap_name="hot"):
         """Overlay heatmap on image."""
@@ -103,18 +112,18 @@ def generate_figure():
     axes[0, 2].set_title("Pixel Difference", fontsize=14, fontweight="bold")
     axes[0, 2].axis("off")
 
-    # Bottom row: Gradient overlays
-    l1_overlay = overlay_heatmap(distorted_arr, grad_to_heatmap(l1_grad), alpha=0.5)
+    # Bottom row: Gradient overlays (all normalized to same scale)
+    l1_overlay = overlay_heatmap(distorted_arr, l1_mag / shared_max, alpha=0.5)
     axes[1, 0].imshow(l1_overlay)
     axes[1, 0].set_title("L1 Gradient Focus", fontsize=14, fontweight="bold", color="#e74c3c")
     axes[1, 0].axis("off")
 
-    dino_overlay = overlay_heatmap(distorted_arr, grad_to_heatmap(dino_grad), alpha=0.5)
+    dino_overlay = overlay_heatmap(distorted_arr, dino_mag / shared_max, alpha=0.5)
     axes[1, 1].imshow(dino_overlay)
     axes[1, 1].set_title("DINO Gradient Focus", fontsize=14, fontweight="bold", color="#27ae60")
     axes[1, 1].axis("off")
 
-    lpips_overlay = overlay_heatmap(distorted_arr, grad_to_heatmap(lpips_grad), alpha=0.5)
+    lpips_overlay = overlay_heatmap(distorted_arr, lpips_mag / shared_max, alpha=0.5)
     axes[1, 2].imshow(lpips_overlay)
     axes[1, 2].set_title("LPIPS Gradient Focus", fontsize=14, fontweight="bold", color="#3498db")
     axes[1, 2].axis("off")

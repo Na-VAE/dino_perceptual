@@ -47,8 +47,8 @@ def generate_figure():
             original_pil = img.resize((512, 512), Image.LANCZOS)
             break
 
-    # Create distorted version (blur)
-    distorted_pil = original_pil.filter(ImageFilter.GaussianBlur(radius=4))
+    # Create distorted version (strong blur for visibility)
+    distorted_pil = original_pil.filter(ImageFilter.GaussianBlur(radius=8))
 
     def pil_to_tensor(img):
         return torch.from_numpy(np.array(img)).permute(2, 0, 1).float() / 127.5 - 1
@@ -63,16 +63,27 @@ def generate_figure():
         else:
             loss = loss_fn(x, ref).mean()
         loss.backward()
-        return x.grad.detach()
+        grad = x.grad.detach()
+        # Normalize gradient to unit norm (entire gradient normalized to scale 1)
+        grad_norm = torch.linalg.vector_norm(grad)
+        return grad / (grad_norm + 1e-8)
 
-    # Compute gradients
+    # Compute gradients (all normalized to same scale)
     l1_grad = get_gradient(None, distorted_t, original_t, is_l1=True)
     dino_grad = get_gradient(dino, distorted_t, original_t)
     lpips_grad = get_gradient(lpips_fn, distorted_t, original_t)
 
-    def grad_to_heatmap(grad):
+    def grad_to_heatmap(grad, shared_max=None):
         mag = torch.sqrt((grad ** 2).sum(dim=1)).squeeze().cpu().numpy()
+        if shared_max is not None:
+            return mag / (shared_max + 1e-8)
         return mag / (mag.max() + 1e-8)
+
+    # Get shared max for consistent colormap across all gradients
+    l1_mag = torch.sqrt((l1_grad ** 2).sum(dim=1)).squeeze().cpu().numpy()
+    dino_mag = torch.sqrt((dino_grad ** 2).sum(dim=1)).squeeze().cpu().numpy()
+    lpips_mag = torch.sqrt((lpips_grad ** 2).sum(dim=1)).squeeze().cpu().numpy()
+    shared_max = max(l1_mag.max(), dino_mag.max(), lpips_mag.max())
 
     # Create figure
     fig, axes = plt.subplots(2, 3, figsize=(12, 8))
@@ -93,16 +104,16 @@ def generate_figure():
     axes[0, 2].set_title("Pixel Difference", fontsize=12)
     axes[0, 2].axis("off")
 
-    # Bottom row: gradients
-    axes[1, 0].imshow(grad_to_heatmap(l1_grad), cmap="inferno")
+    # Bottom row: gradients (all using same scale for fair comparison)
+    axes[1, 0].imshow(l1_mag / shared_max, cmap="inferno", vmin=0, vmax=1)
     axes[1, 0].set_title("L1 Gradient", fontsize=12, color="#3498db")
     axes[1, 0].axis("off")
 
-    axes[1, 1].imshow(grad_to_heatmap(dino_grad), cmap="inferno")
+    axes[1, 1].imshow(dino_mag / shared_max, cmap="inferno", vmin=0, vmax=1)
     axes[1, 1].set_title("DINO Gradient", fontsize=12, color="#2ecc71")
     axes[1, 1].axis("off")
 
-    axes[1, 2].imshow(grad_to_heatmap(lpips_grad), cmap="inferno")
+    axes[1, 2].imshow(lpips_mag / shared_max, cmap="inferno", vmin=0, vmax=1)
     axes[1, 2].set_title("LPIPS Gradient", fontsize=12, color="#e74c3c")
     axes[1, 2].axis("off")
 
