@@ -191,7 +191,7 @@
 
 <h3>Comparison with State-of-the-Art VAEs</h3>
 
-<p>Reconstruction quality on <strong>ImageNet 256&times;256</strong> (center crop). Our ViTok model with DINO loss achieves the best balance of perceptual quality and fidelity:</p>
+<p>Reconstruction quality on <strong>ImageNet 256&times;256</strong> (center crop). ViTok-v2 models trained with <strong>DINO perceptual loss (no GAN)</strong> achieve state-of-the-art results using only L1 + DINO + scaling losses:</p>
 
 <table>
     <thead>
@@ -246,21 +246,41 @@
             <td>0.904</td>
         </tr>
         <tr style="background: #f0fdf4;">
-            <td><strong>ViTok + DINO</strong></td>
+            <td><strong>ViTok-v2 Td4-T/16&times;16</strong></td>
+            <td>f16&times;16ch</td>
+            <td>1.52</td>
+            <td>3.66</td>
+            <td>28.46</td>
+            <td>0.793</td>
+        </tr>
+        <tr style="background: #f0fdf4;">
+            <td><strong>ViTok-v2 Td4-T/16&times;32</strong></td>
+            <td>f16&times;32ch</td>
+            <td>1.26</td>
+            <td>2.94</td>
+            <td>31.23</td>
+            <td>0.867</td>
+        </tr>
+        <tr style="background: #dcfce7;">
+            <td><strong>ViTok-v2 Td4-T/16&times;64</strong></td>
             <td>f16&times;64ch</td>
-            <td class="best"><strong>0.30</strong></td>
-            <td class="best"><strong>1.12</strong></td>
-            <td class="best"><strong>33.64</strong></td>
-            <td class="best"><strong>0.914</strong></td>
+            <td class="best"><strong>0.74</strong></td>
+            <td class="best"><strong>2.49</strong></td>
+            <td class="best"><strong>34.16</strong></td>
+            <td class="best"><strong>0.924</strong></td>
         </tr>
     </tbody>
 </table>
 
-<p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">ViTok uses 4&times; fewer tokens (256 vs 1024) than f8-based methods, enabling faster diffusion training.</p>
+<div class="callout">
+    <strong>No GAN required:</strong> ViTok-v2 achieves these results using only L1 (Charbonnier) + DINO perceptual loss + scaling losses (SSIM, FFT). No adversarial training needed, which simplifies training and improves stability.
+</div>
+
+<p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">ViTok uses 4&times; fewer tokens (256 vs 1024) than f8-based methods, enabling faster diffusion training. All ViTok-v2 models are 4.5B parameters (Td4-T configuration).</p>
 
 <h3>Loss Ablation</h3>
 
-<p>Effect of different loss configurations on our <strong>4.5B parameter ViTok autoencoder</strong> (Td4-T/16&times;64):</p>
+<p>Effect of different loss configurations on our <strong>4.5B parameter ViTok-v2 autoencoder</strong> (Td4-T/16&times;64):</p>
 
 <table>
     <thead>
@@ -275,30 +295,37 @@
     <tbody>
         <tr>
             <td><em>Pixel-only (Charbonnier)</em></td>
-            <td>6.12</td>
-            <td>12.8</td>
-            <td class="best">34.80</td>
-            <td class="best">0.931</td>
+            <td>2.13</td>
+            <td>6.96</td>
+            <td class="best">34.31</td>
+            <td>0.925</td>
+        </tr>
+        <tr>
+            <td>+ SSIM (&lambda;=0.1)</td>
+            <td>1.99</td>
+            <td>6.76</td>
+            <td>34.29</td>
+            <td class="best">0.927</td>
         </tr>
         <tr>
             <td>+ LPIPS (&lambda;=0.1)</td>
-            <td>0.72 <span class="better">(-88%)</span></td>
-            <td>2.93 <span class="better">(-77%)</span></td>
+            <td>0.72 <span class="better">(-66%)</span></td>
+            <td>2.93 <span class="better">(-58%)</span></td>
             <td>34.19</td>
             <td>0.923</td>
         </tr>
         <tr>
             <td>+ DINO (&lambda;=250)</td>
-            <td>0.51 <span class="better">(-92%)</span></td>
-            <td>1.45 <span class="better">(-89%)</span></td>
+            <td>0.51 <span class="better">(-76%)</span></td>
+            <td>1.45 <span class="better">(-79%)</span></td>
             <td>33.93</td>
             <td>0.919</td>
         </tr>
         <tr style="background: #f0fdf4;">
             <td><strong>+ DINO (&lambda;=1000)</strong></td>
-            <td class="best"><strong>0.30</strong> <span class="better">(-95%)</span></td>
-            <td class="best"><strong>1.12</strong> <span class="better">(-91%)</span></td>
-            <td>33.64 <span class="worse">(-1.16 dB)</span></td>
+            <td class="best"><strong>0.30</strong> <span class="better">(-86%)</span></td>
+            <td class="best"><strong>1.12</strong> <span class="better">(-84%)</span></td>
+            <td>33.64 <span class="worse">(-0.67 dB)</span></td>
             <td>0.914</td>
         </tr>
     </tbody>
@@ -306,45 +333,12 @@
 
 <p><strong>Key observations:</strong></p>
 <ul style="margin: 1rem 0 1rem 1.5rem;">
-    <li>DINO achieves <strong>20&times; better rFID</strong> (0.30 vs 6.12) compared to pixel-only</li>
-    <li>DINO achieves <strong>11&times; better rFDD</strong> (1.12 vs 12.8) compared to pixel-only</li>
-    <li>DINO achieves <strong>2&times; better</strong> perceptual metrics than LPIPS</li>
-    <li>The cost is ~1.2 dB PSNR&mdash;negligible to human perception</li>
+    <li>DINO achieves <strong>7&times; better rFID</strong> (0.30 vs 2.13) compared to pixel-only</li>
+    <li>DINO achieves <strong>6&times; better rFDD</strong> (1.12 vs 6.96) compared to pixel-only</li>
+    <li>DINO outperforms LPIPS: 2.4&times; better rFID, 2.6&times; better rFDD</li>
+    <li>The cost is ~0.7 dB PSNR&mdash;negligible to human perception</li>
     <li>Higher DINO weight trades more PSNR for better perceptual metrics</li>
 </ul>
-
-<h2>Gradient Visualization</h2>
-
-<p>To understand <em>why</em> DINO works better, we can visualize the gradient of each loss with respect to a distorted image. This shows "where the loss focuses":</p>
-
-<figure>
-    <img src="fig_gradients.png" alt="Gradient visualization comparing L1, DINO, and LPIPS">
-    <figcaption>Gradient magnitude for each loss type. L1 is uniform; DINO and LPIPS focus on semantically meaningful regions.</figcaption>
-</figure>
-
-<ul style="margin: 1rem 0 1rem 1.5rem;">
-    <li><strong>L1 gradient:</strong> Nearly uniform&mdash;every pixel matters equally</li>
-    <li><strong>DINO gradient:</strong> Focuses on semantic structure (edges, textures, object parts)</li>
-    <li><strong>LPIPS gradient:</strong> Similar pattern but less pronounced than DINO</li>
-</ul>
-
-<h3>Gradient Overlay</h3>
-
-<p>We can also overlay these gradients on the image to see exactly which regions each loss prioritizes:</p>
-
-<figure>
-    <img src="fig_gradient_overlay.png" alt="Gradient overlay visualization">
-    <figcaption>Gradient magnitude overlaid on the distorted image. Bright regions indicate where the loss applies the strongest correction signal.</figcaption>
-</figure>
-
-<h3>Across Different Distortions</h3>
-
-<p>Different distortion types (blur, noise, JPEG compression, color shift) reveal different gradient patterns:</p>
-
-<figure>
-    <img src="fig_distortions.png" alt="Gradient comparison across distortion types">
-    <figcaption>Gradient saliency across four distortion types. DINO consistently focuses on semantically meaningful regions regardless of distortion type.</figcaption>
-</figure>
 
 <h2>Usage</h2>
 
