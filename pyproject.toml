@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dino-perceptual"
+version = "0.1.2"
+description = "DINO-based perceptual loss for image reconstruction and generation"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    {name = "Philippe Hansen-Estruch"},
+    {name = "Jiahui Chen"},
+    {name = "Vivek Ramanujan"},
+    {name = "Orr Zohar"},
+    {name = "Yan Ping"},
+    {name = "Animesh Sinha"},
+    {name = "Markos Georgopoulos"},
+    {name = "Edgar Schoenfeld"},
+    {name = "Ji Hou"},
+    {name = "Felix Juefei-Xu"},
+    {name = "Sriram Vishwanath"},
+    {name = "Ali Thabet"},
+]
+keywords = ["deep-learning", "perceptual-loss", "dino", "lpips", "computer-vision", "image-generation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1.0",
+]
+examples = [
+    "matplotlib>=3.5.0",
+    "pillow>=9.0.0",
+    "lpips>=0.1.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/Na-VAE/dino-perceptual"
+Repository = "https://github.com/Na-VAE/dino-perceptual"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dino_perceptual*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

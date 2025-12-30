@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DINO Perceptual Loss: A Modern Alternative to LPIPS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #111827;
+            --text-secondary: #6b7280;
+            --accent: #2563eb;
+            --accent-light: #eff6ff;
+            --border: #e5e7eb;
+            --green: #059669;
+            --green-bg: #ecfdf5;
+            --red: #dc2626;
+            --red-bg: #fef2f2;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.75;
+            color: var(--text);
+            background: var(--bg);
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            font-size: 16px;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+            line-height: 1.2;
+        }
+
+        h2 {
+            font-size: 1.375rem;
+            font-weight: 600;
+            margin: 2.5rem 0 1rem;
+            letter-spacing: -0.015em;
+        }
+
+        h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin: 1.75rem 0 0.75rem;
+        }
+
+        p { margin-bottom: 1.25rem; }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.125rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .authors {
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+            margin-bottom: 3rem;
+        }
+
+        .authors a {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .authors a:hover { color: var(--accent); }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        code {
+            background: #f3f4f6;
+            padding: 0.125em 0.375em;
+            border-radius: 4px;
+            font-size: 0.875em;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.875rem;
+        }
+
+        th, td {
+            padding: 0.75rem 0.625rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        .highlight { background: var(--green-bg); }
+        .best { font-weight: 700; }
+        .second { text-decoration: underline; }
+
+        .delta-up {
+            color: var(--green);
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .delta-down {
+            color: var(--red);
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .callout {
+            background: var(--accent-light);
+            border-left: 3px solid var(--accent);
+            padding: 1rem 1.25rem;
+            margin: 1.75rem 0;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.9375rem;
+        }
+
+        .finding {
+            background: var(--green-bg);
+            border-left: 3px solid var(--green);
+            padding: 1rem 1.25rem;
+            margin: 1.75rem 0;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.9375rem;
+        }
+
+        .eq {
+            text-align: center;
+            margin: 1.5rem 0;
+            font-family: 'Times New Roman', serif;
+            font-size: 1.0625rem;
+        }
+
+        ul, ol { margin: 1rem 0 1.25rem 1.25rem; }
+        li { margin-bottom: 0.375rem; }
+
+        .note {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            margin-top: -0.5rem;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2.5rem 0;
+        }
+
+        footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .references { font-size: 0.8125rem; color: var(--text-secondary); }
+        .references ol { margin-left: 1rem; }
+        .references li { margin-bottom: 0.5rem; }
+
+        @media (max-width: 600px) {
+            body { padding: 2rem 1rem; }
+            h1 { font-size: 1.75rem; }
+            table { font-size: 0.8125rem; }
+            th, td { padding: 0.5rem 0.375rem; }
+        }
+    </style>
+</head>
+<body>
+
+<h1>DINO Perceptual Loss</h1>
+<p class="subtitle">A modern alternative to LPIPS for training image autoencoders</p>
+<p class="authors">
+    <a href="https://github.com/philippe-eecs">Philippe Hansen-Estruch</a> ·
+    <a href="https://vkramanuj.github.io/">Vivek Ramanujan</a>
+</p>
+
+<div class="callout">
+    <strong>TL;DR:</strong> We replace LPIPS (VGG-based perceptual loss) with DINOv2/v3 features for training image autoencoders. DINO loss achieves <strong>7× better rFID</strong> and <strong>6× better rFDD</strong> than pixel-only training, and performs comparably to LPIPS—despite having no human-aligned supervision. Unlike <a href="https://arxiv.org/abs/2301.09515">StyleGAN-T</a> (DINO as discriminator) or <a href="https://arxiv.org/abs/2510.11690">RAE</a> (frozen DINO encoder), we use DINO purely as a loss function: simpler, no adversarial training, no architectural constraints.
+</div>
+
+<h2>Autoencoders and Latent Diffusion</h2>
+
+<p>Modern image generation pipelines like Stable Diffusion and FLUX operate in a compressed <em>latent space</em> rather than directly on pixels. An autoencoder first compresses images into a lower-dimensional representation, and a diffusion model then learns to generate in this latent space. This approach, introduced by <a href="https://arxiv.org/abs/2112.10752">Rombach et al.</a>, makes high-resolution generation computationally tractable.</p>
+
+<p>The autoencoder's job is to compress images while preserving enough information for high-quality reconstruction. The compression ratio is typically expressed as <code>f×c</code>, where <code>f</code> is the spatial downsampling factor and <code>c</code> is the number of latent channels.</p>
+
+<p>This creates a fundamental tension between <strong>reconstruction quality (rFID)</strong> and <strong>generation quality (gFID)</strong>:</p>
+
+<ul>
+    <li><strong>Less compression</strong> (e.g., f8×16ch) → better rFID since more information is preserved, but the latent space is high-dimensional and harder for diffusion models to learn, leading to worse gFID.</li>
+    <li><strong>More compression</strong> (e.g., f16×16ch) → worse rFID since information is lost, but the latent space is more compact and structured, making it easier for diffusion models to learn effective representations, improving gFID.</li>
+</ul>
+
+<p>The optimal compression balances this trade-off: aggressive enough that diffusion models can learn efficiently, but not so aggressive that reconstruction quality bottlenecks generation. This is why perceptual losses matter—they help preserve the <em>right</em> information under compression.</p>
+
+<h2>The Perception-Distortion Trade-off</h2>
+
+<p>The standard auto-encoder training approach combines several terms:</p>
+
+<p class="eq">L = L<sub>pixel</sub> + α · L<sub>perceptual</sub> + β · L<sub>GAN</sub></p>
+
+<p>Each term creates a different trade-off, as explored in <a href="https://arxiv.org/abs/2501.09755">ViTok</a> (with ViTok-v2 coming soon):</p>
+
+<ul>
+    <li><strong>Pixel losses (L1/L2)</strong> optimize distortion metrics (PSNR, SSIM) but produce blurry outputs by themselves. The model learns to output the average of plausible reconstructions, which minimizes pixel error but looks unrealistic.</li>
+    <li><strong>Perceptual losses (LPIPS)</strong> compare images in feature space using VGG-16 features combined with linear layers trained on human perceptual judgments. This reduces blurriness and preserves high-level structure but relies on decade-old VGG features.</li>
+    <li><strong>Adversarial losses (GAN)</strong> improve realism by training a discriminator, but introduce training instability and mode collapse risks. With Vision Transformers, GANs often require multi-stage training pipelines for stable convergence.</li>
+</ul>
+
+<div class="callout">
+    <strong>The core trade-off:</strong> Pixel losses achieve the best PSNR/SSIM but the worst perceptual quality (FID/FDD). Adding perceptual or adversarial losses improves perceptual metrics at the cost of distortion metrics—hence we seek more Pareto-optimal solutions.
+</div>
+
+<h2>Why Replace LPIPS with DINO?</h2>
+
+<p>LPIPS uses VGG-16, a 2014 classification network trained on 1.2M ImageNet images. <strong>DINOv2</strong> and <strong>DINOv3</strong> are Meta's self-supervised vision models, offering several advantages:</p>
+
+<ul>
+    <li><strong>Modern architecture:</strong> Vision Transformers with attention (vs. 2014 CNNs)</li>
+    <li><strong>Scale:</strong> Trained on 1.7B images (1400× more than VGG)</li>
+    <li><strong>Self-supervised:</strong> Learns visual similarity, not classification</li>
+    <li><strong>No GAN needed:</strong> Strong enough to eliminate adversarial training entirely</li>
+</ul>
+
+<hr>
+
+<h2>Experimental Setup</h2>
+
+<h3>Evaluation Metrics</h3>
+
+<ul>
+    <li><strong>PSNR / SSIM:</strong> Distortion metrics measuring pixel-level fidelity. Higher is better, but correlates poorly with human perception.</li>
+    <li><strong>rFID:</strong> Fréchet Inception Distance on reconstructions. Measures distributional similarity using Inception-v3 features. Lower is better.</li>
+    <li><strong>rFDD:</strong> Fréchet DINO Distance—like FID but uses DINOv2 features. We find rFDD correlates better with perceptual quality than rFID, since DINO captures semantic structure rather than texture statistics. Lower is better.</li>
+</ul>
+
+<h3>Computing FDD</h3>
+
+<p>FDD works exactly like FID, but uses DINO CLS tokens instead of Inception features:</p>
+
+<ol>
+    <li>Extract DINO CLS token features from real images → (N, 768)</li>
+    <li>Extract DINO CLS token features from reconstructed/generated images → (M, 768)</li>
+    <li>Compute Fréchet distance between the two Gaussian distributions</li>
+</ol>
+
+<pre><code>import numpy as np
+from scipy import linalg
+from dino_perceptual import DINOModel
+
+def compute_fdd(real_features, fake_features):
+    mu1, sigma1 = real_features.mean(0), np.cov(real_features, rowvar=False)
+    mu2, sigma2 = fake_features.mean(0), np.cov(fake_features, rowvar=False)
+    diff = mu1 - mu2
+    covmean, _ = linalg.sqrtm(sigma1 @ sigma2, disp=False)
+    if np.iscomplexobj(covmean):
+        covmean = covmean.real
+    return diff @ diff + np.trace(sigma1 + sigma2 - 2 * covmean)
+
+# Usage
+extractor = DINOModel(model_size="B").cuda().eval()
+real_feats, _ = extractor(real_images)
+fake_feats, _ = extractor(generated_images)
+fdd = compute_fdd(real_feats.cpu().numpy(), fake_feats.cpu().numpy())</code></pre>
+
+<p>The figure below shows how to interpret FDD scores:</p>
+
+<img src="fig_fdd.png" alt="FDD score interpretation: same distribution ~0, good reconstruction 1-5, poor reconstruction >5" style="width: 100%; max-width: 500px; margin: 1.5rem 0;">
+
+<p class="note"><strong>Interpretation:</strong> FDD &lt;1 indicates excellent reconstruction quality (nearly identical distributions), 1-5 is good, and &gt;5 suggests significant perceptual differences. Unlike pixel metrics, FDD captures semantic similarity—two images can have low FDD despite pixel-level differences if they share the same high-level structure.</p>
+
+<h3>Dataset</h3>
+
+<p><strong>ImageNet 256×256</strong> (center crop) validation set with 50K images. All baseline results (SD-VAE, Qwen VAE, FLUX.1) are self-reproduced on the same benchmark for fair comparison.</p>
+
+<h3>Model</h3>
+
+<p>We train a Vision Transformer autoencoder following the <a href="https://arxiv.org/abs/2501.09755">ViTok</a> architecture: a shallow ViT encoder compresses images into latent tokens, and a deeper ViT decoder reconstructs the output. We use f16 spatial compression (256 tokens for 256×256 images) with 64 latent channels.</p>
+
+<h3>DINO Loss Details</h3>
+
+<p>For the perceptual loss, we use a frozen <strong>DINOv3-B</strong> (ViT-Base) model. We extract features from intermediate transformer layers, L2-normalize per token, and compute MSE between input and reconstruction features. We did not ablate other DINO model sizes (S, L, G, H)—larger models may yield further improvements.</p>
+
+<p>The full loss for the final model combines: <strong>Charbonnier</strong> + <strong>SSIM</strong> (γ=0.1) + <strong>DINO</strong> (α=250). No adversarial training is used.</p>
+
+<h3>DINO Loss Behavior</h3>
+
+<p>A key property of any perceptual loss is that it should increase monotonically with perceptual degradation. We verified this by measuring DINO loss under three common distortions:</p>
+
+<img src="fig_distortions.png" alt="DINO loss vs blur, noise, and JPEG compression" style="width: 100%; max-width: 900px; margin: 1.5rem 0;">
+
+<p>The plots show DINO loss (DINOv2-B) for a sample image degraded with increasing levels of blur (σ=0→8), noise (σ=0→100), and JPEG compression (quality 100→5). In all cases, the loss increases monotonically—confirming that DINO features capture perceptual degradation in a well-behaved manner suitable for gradient-based optimization.</p>
+
+<h3>Loss Scaling Guide</h3>
+
+<p>The DINO loss magnitude is typically 10⁻⁴ to 10⁻² for natural images. Scale it to balance with your pixel loss:</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Pixel Loss Type</th>
+            <th>Recommended DINO Weight (α)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>L1 / L2</td>
+            <td>250 - 500</td>
+        </tr>
+        <tr>
+            <td>Charbonnier</td>
+            <td>250 - 1000</td>
+        </tr>
+        <tr>
+            <td>+ SSIM loss</td>
+            <td>250 (SSIM provides structure)</td>
+        </tr>
+    </tbody>
+</table>
+
+<p><strong>Rule of thumb:</strong> Start with α=250, increase to α=1000 for better perceptual quality at the cost of ~1 dB PSNR.</p>
+
+<hr>
+
+<h2>Results</h2>
+
+<h3>Loss Ablation</h3>
+
+<p>Effect of adding different perceptual losses to the base Charbonnier pixel loss:</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Loss Configuration</th>
+            <th>rFID ↓</th>
+            <th>rFDD ↓</th>
+            <th>PSNR ↑</th>
+            <th>SSIM ↑</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Pixel-only (Charb)</td>
+            <td>5.13</td>
+            <td>10.96</td>
+            <td class="best">34.81</td>
+            <td>0.929</td>
+        </tr>
+        <tr>
+            <td>+ SSIM (γ=0.1)</td>
+            <td>4.87 <span class="delta-up">↓5%</span></td>
+            <td>10.42 <span class="delta-up">↓5%</span></td>
+            <td>34.72</td>
+            <td class="best">0.931</td>
+        </tr>
+        <tr>
+            <td>+ LPIPS (α=0.1)</td>
+            <td>0.72 <span class="delta-up">↓86%</span></td>
+            <td>2.93 <span class="delta-up">↓73%</span></td>
+            <td>34.19 <span class="delta-down">↓0.6dB</span></td>
+            <td>0.923</td>
+        </tr>
+        <tr>
+            <td>+ DINO (α=250)</td>
+            <td>0.51 <span class="delta-up">↓90%</span></td>
+            <td>1.45 <span class="delta-up">↓87%</span></td>
+            <td>33.93 <span class="delta-down">↓0.9dB</span></td>
+            <td>0.919</td>
+        </tr>
+        <tr class="highlight">
+            <td><strong>+ DINO (α=1000)</strong></td>
+            <td class="best">0.30 <span class="delta-up">↓94%</span></td>
+            <td class="best">1.12 <span class="delta-up">↓90%</span></td>
+            <td>33.64 <span class="delta-down">↓1.2dB</span></td>
+            <td>0.914</td>
+        </tr>
+        <tr>
+            <td>+ LPIPS + DINO (α=0.1, 250)</td>
+            <td>0.38 <span class="delta-up">↓93%</span></td>
+            <td>1.35 <span class="delta-up">↓88%</span></td>
+            <td>33.89 <span class="delta-down">↓0.9dB</span></td>
+            <td>0.918</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="finding">
+    <strong>Key finding:</strong> DINO achieves <strong>17× better rFID</strong> (0.30 vs 5.13) and <strong>10× better rFDD</strong> (1.12 vs 10.96) compared to pixel-only training, at a cost of ~1 dB PSNR. Interestingly, DINO performs comparably to LPIPS as a perceptual loss despite having no human-aligned supervision—DINO's self-supervised features appear to capture similar perceptual structure. Combining LPIPS with DINO does not improve over DINO alone, suggesting the two losses capture overlapping information.
+</div>
+
+<p>Based on these ablations, we use <strong>Charbonnier + SSIM + DINO</strong> as our final loss configuration and train models with 16, 32, and 64 latent channels.</p>
+
+<h3>Perception-Distortion Visualization</h3>
+
+<p>The scatter plots below visualize the trade-off between perceptual metrics (rFID, rFDD) and distortion metrics (PSNR, SSIM). The green line shows a potential Pareto frontier given the limited data points.</p>
+
+<img src="fig_pareto.png" alt="Scatter plots showing rFID vs SSIM, rFID vs PSNR, rFDD vs PSNR, and rFDD vs SSIM" style="width: 100%; max-width: 900px; margin: 1.5rem 0;">
+
+<p class="note">With more models and configurations, the true frontier would likely shift. These plots illustrate the general trade-off pattern rather than definitive optimal points.</p>
+
+<h3>Comparison with State-of-the-Art</h3>
+
+<p>Using Charbonnier + SSIM + DINO loss, we train ViT autoencoders at three compression levels. Reconstruction quality on ImageNet 256×256:</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Model</th>
+            <th>Compression</th>
+            <th>Ratio</th>
+            <th>rFID ↓</th>
+            <th>rFDD ↓</th>
+            <th>PSNR ↑</th>
+            <th>SSIM ↑</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>SD-VAE</td>
+            <td>f8×4ch</td>
+            <td>48</td>
+            <td>0.73</td>
+            <td>6.14</td>
+            <td>25.70</td>
+            <td>0.702</td>
+        </tr>
+        <tr>
+            <td>SDXL-VAE</td>
+            <td>f8×4ch</td>
+            <td>48</td>
+            <td>0.68</td>
+            <td>—</td>
+            <td>26.04</td>
+            <td>0.834</td>
+        </tr>
+        <tr>
+            <td>Qwen VAE</td>
+            <td>f8×16ch</td>
+            <td>12</td>
+            <td>1.32</td>
+            <td>7.36</td>
+            <td>30.27</td>
+            <td>0.860</td>
+        </tr>
+        <tr>
+            <td>FLUX.1</td>
+            <td>f8×16ch</td>
+            <td>12</td>
+            <td class="best">0.15</td>
+            <td class="second">2.29</td>
+            <td>31.10</td>
+            <td>0.887</td>
+        </tr>
+        <tr>
+            <td>FLUX.2</td>
+            <td>f8×16ch</td>
+            <td>12</td>
+            <td class="second">0.27</td>
+            <td>—</td>
+            <td>31.46</td>
+            <td>0.904</td>
+        </tr>
+        <tr class="highlight">
+            <td><strong>ViTok-v2 16×16</strong></td>
+            <td>f16×16ch</td>
+            <td>48</td>
+            <td>1.52</td>
+            <td>3.66</td>
+            <td>28.46</td>
+            <td>0.793</td>
+        </tr>
+        <tr class="highlight">
+            <td><strong>ViTok-v2 16×32</strong></td>
+            <td>f16×32ch</td>
+            <td>24</td>
+            <td>1.26</td>
+            <td>2.94</td>
+            <td>31.23</td>
+            <td>0.867</td>
+        </tr>
+        <tr class="highlight">
+            <td><strong>ViTok-v2 16×64</strong></td>
+            <td>f16×64ch</td>
+            <td>12</td>
+            <td>0.74</td>
+            <td class="best">2.49</td>
+            <td class="best">34.16</td>
+            <td class="best">0.924</td>
+        </tr>
+    </tbody>
+</table>
+
+<p class="note"><strong>Bold</strong> = best, <u>underlined</u> = second best. Ratio = pixels per latent channel (3×f²/c). ViTok-v2 uses f16 compression (256 tokens) vs f8 methods (1024 tokens), enabling 4× faster diffusion training.</p>
+
+<div class="finding">
+    <strong>No GAN required:</strong> ViTok-v2 achieves state-of-the-art results using only pixel + DINO losses. No adversarial training needed—simpler pipeline, more stable training.
+</div>
+
+<hr>
+
+<h2>Related Work</h2>
+
+<p>The idea of using DINO features for image synthesis has been explored in several concurrent and prior works:</p>
+
+<ul>
+    <li><strong><a href="https://arxiv.org/abs/2301.09515">StyleGAN-T</a></strong> (Sauer et al., ICML 2023) pioneered using a frozen DINO ViT-S as the discriminator backbone for text-to-image GANs. Multiple discriminator heads process intermediate DINO tokens. This demonstrated that DINO features are effective for adversarial training.</li>
+    <li><strong><a href="https://arxiv.org/abs/2311.17042">ADD</a></strong> (Sauer et al., ECCV 2024) uses a frozen DINOv2 discriminator for adversarial diffusion distillation, enabling 1-4 step sampling from diffusion models while maintaining quality.</li>
+    <li><strong><a href="https://arxiv.org/abs/2501.01423">VA-VAE</a></strong> (Yao et al., CVPR 2025) aligns VAE latents with DINOv2 features via a similarity loss, improving generation quality and achieving 21× faster convergence.</li>
+    <li><strong><a href="https://arxiv.org/abs/2510.11690">Representation Autoencoders</a></strong> (Zheng et al., 2024) replace VAE encoders entirely with frozen pretrained encoders (DINO, SigLIP, MAE) and train only the decoder.</li>
+</ul>
+
+<p>Our approach differs in that we use DINO purely as a <strong>perceptual loss</strong>—comparing features between input and reconstruction—rather than as a discriminator, latent alignment target, or encoder replacement. This is simpler (no adversarial training, no frozen encoder constraints) while achieving comparable perceptual quality improvements.</p>
+
+<h2>Conclusion</h2>
+
+<p>DINO perceptual loss is a simple drop-in replacement for LPIPS that leverages modern self-supervised features. By using DINOv2/v3 instead of VGG, we achieve 2× better perceptual metrics while eliminating the need for adversarial training.</p>
+
+<p>Code: <a href="https://github.com/Na-VAE/dino_perceptual">github.com/Na-VAE/dino_perceptual</a></p>
+
+<h2>Citation</h2>
+
+<p>If you find this code helpful, please cite:</p>
+
+<pre><code>@software{dino_perceptual,
+  title={DINO Perceptual Loss},
+  author={Hansen-Estruch, Philippe and Chen, Jiahui and Ramanujan, Vivek and Zohar, Orr and Ping, Yan and Sinha, Animesh and Georgopoulos, Markos and Schoenfeld, Edgar and Hou, Ji and Juefei-Xu, Felix and Vishwanath, Sriram and Thabet, Ali},
+  year={2025},
+  url={https://github.com/Na-VAE/dino_perceptual}
+}
+
+@article{vitok_v2,
+  title={ViTok-v2: Scaling Visual Tokenizers},
+  author={Hansen-Estruch, Philippe and others},
+  year={2025},
+  note={Coming soon! Please check back for the official citation.}
+}</code></pre>
+
+<h2 class="references">References</h2>
+
+<ol class="references">
+    <li>Rombach et al. "High-Resolution Image Synthesis with Latent Diffusion Models." CVPR 2022. <a href="https://arxiv.org/abs/2112.10752">arXiv</a></li>
+    <li>Zhang et al. "The Unreasonable Effectiveness of Deep Features as a Perceptual Metric." CVPR 2018. <a href="https://arxiv.org/abs/1801.03924">arXiv</a></li>
+    <li>Oquab et al. "DINOv2: Learning Robust Visual Features without Supervision." TMLR 2024. <a href="https://arxiv.org/abs/2304.07193">arXiv</a></li>
+    <li>Hansen-Estruch et al. "Learnings from Scaling Visual Tokenizers for Reconstruction and Generation." ICML 2025. <a href="https://arxiv.org/abs/2501.09755">arXiv</a></li>
+    <li>Hansen-Estruch et al. "ViTok-v2: Scaling Visual Tokenizers." 2025. (Coming soon!)</li>
+    <li>Sauer et al. "StyleGAN-T: Unlocking the Power of GANs for Fast Large-Scale Text-to-Image Synthesis." ICML 2023. <a href="https://arxiv.org/abs/2301.09515">arXiv</a></li>
+    <li>Sauer et al. "Adversarial Diffusion Distillation." ECCV 2024. <a href="https://arxiv.org/abs/2311.17042">arXiv</a></li>
+    <li>Yao et al. "Reconstruction vs. Generation: Taming Optimization Dilemma in Latent Diffusion Models." CVPR 2025. <a href="https://arxiv.org/abs/2501.01423">arXiv</a></li>
+    <li>Zheng et al. "Diffusion Transformers with Representation Autoencoders." 2024. <a href="https://arxiv.org/abs/2510.11690">arXiv</a></li>
+</ol>
+
+<footer>
+    Part of the <a href="https://github.com/Na-VAE">Na-VAE</a> project.
+</footer>
+
+</body>
+</html>
