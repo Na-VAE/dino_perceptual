@@ -50,29 +50,28 @@ def _resolve_model_name(model_size: str, version: str = "v3") -> str:
     return DINOV3_MODELS.get(key, DINOV3_MODELS['B'])
 
 
-class DINOModel(nn.Module):
-    """DINO feature extractor for FDD calculation.
+def _prep(x: torch.Tensor, target_size: int, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
+    """Preprocess images: [-1,1] -> ImageNet normalized, optionally resized."""
+    x = (x + 1.0) / 2.0  # [-1,1] -> [0,1]
+    H, W = x.shape[2], x.shape[3]
+    long_side = max(H, W)
+    if long_side > target_size:
+        scale = target_size / long_side
+        new_h, new_w = max(1, round(H * scale)), max(1, round(W * scale))
+        x = F.interpolate(x, size=(new_h, new_w), mode='bicubic', align_corners=False)
+    return (x - mean) / std
 
-    Extracts CLS token features suitable for Frechet distance calculation.
 
-    Args:
-        model_name: HuggingFace model name. If None, uses model_size to select.
-        model_size: Model size key ('S', 'B', 'L', 'H'). Default 'B'.
-        version: DINO version ('v2' or 'v3'). Default 'v3'.
-        target_size: Target size for preprocessing. Images larger than this are downscaled.
-        preprocess: Preprocessing mode:
-            - "auto": Use HuggingFace AutoImageProcessor (recommended for new code)
-            - True: Use internal preprocessing (expects [-1, 1] input)
-            - False: Skip preprocessing (expects already normalized input)
-    """
+class _DINOBase(nn.Module):
+    """Shared base for DINO models."""
 
     def __init__(
         self,
-        model_name: Optional[str] = None,
-        model_size: str = "B",
-        version: str = "v3",
-        target_size: int = 512,
-        preprocess: Union[str, bool] = True,
+        model_name: Optional[str],
+        model_size: str,
+        version: str,
+        target_size: int,
+        preprocess: Union[str, bool],
     ):
         super().__init__()
         resolved_name = model_name or _resolve_model_name(model_size, version)
@@ -80,9 +79,9 @@ class DINOModel(nn.Module):
         self.model_name = resolved_name
         self.version = version
         self.target_size = target_size
-        self.preprocess_mode = preprocess
+        self.preprocess = preprocess
 
-        # ImageNet normalization for internal preprocessing
+        # ImageNet normalization
         self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
@@ -98,45 +97,59 @@ class DINOModel(nn.Module):
 
         self.feature_dim = self.model.config.hidden_size
 
-    def _prep(self, x: torch.Tensor) -> torch.Tensor:
-        """Internal preprocessing: [-1,1] -> ImageNet normalized, optionally resized."""
-        x = (x + 1.0) / 2.0  # [-1,1] -> [0,1]
-        B, C, H, W = x.shape
-        long_side = max(H, W)
-        if long_side > self.target_size:
-            scale = self.target_size / long_side
-            new_h, new_w = max(1, round(H * scale)), max(1, round(W * scale))
-            x = F.interpolate(x, size=(new_h, new_w), mode='bicubic', align_corners=False)
-        x = (x - self.mean) / self.std
+    def _apply_preprocess(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply preprocessing based on mode."""
+        if self.preprocess == "auto" and self._hf_processor is not None:
+            x = self._hf_processor(x, return_tensors="pt", do_rescale=False)["pixel_values"]
+            return x.to(self.mean.device)
+        elif self.preprocess:
+            return _prep(x, self.target_size, self.mean, self.std)
         return x
+
+
+class DINOModel(_DINOBase):
+    """DINO feature extractor for FDD calculation.
+
+    Extracts CLS token features suitable for Frechet distance calculation.
+
+    Args:
+        model_name: HuggingFace model name. If None, uses model_size to select.
+        model_size: Model size key ('S', 'B', 'L', 'H'). Default 'B'.
+        version: DINO version ('v2' or 'v3'). Default 'v3'.
+        target_size: Target size for preprocessing. Images larger than this are downscaled.
+        preprocess: Preprocessing mode:
+            - "auto": Use HuggingFace AutoImageProcessor
+            - True: Use internal preprocessing (expects [-1, 1] input, default)
+            - False: Skip preprocessing (expects already normalized input)
+    """
+
+    def __init__(
+        self,
+        model_name: Optional[str] = None,
+        model_size: str = "B",
+        version: str = "v3",
+        target_size: int = 512,
+        preprocess: Union[str, bool] = True,
+    ):
+        super().__init__(model_name, model_size, version, target_size, preprocess)
 
     def forward(self, x: torch.Tensor):
         """Extract CLS token features from images.
 
         Args:
-            x: Tensor of shape (B, C, H, W). Expected range depends on preprocess mode:
-               - preprocess=True: [-1, 1]
-               - preprocess="auto": [0, 255] uint8 or [0, 1] float
-               - preprocess=False: already ImageNet normalized
+            x: Tensor of shape (B, C, H, W). Expected range depends on preprocess mode.
 
         Returns:
             features: Tensor of shape (B, feature_dim).
             None: Placeholder for compatibility.
         """
-        if self.preprocess_mode == "auto" and self._hf_processor is not None:
-            x = self._hf_processor(x, return_tensors="pt", do_rescale=False)["pixel_values"]
-            x = x.to(self.mean.device)
-        elif self.preprocess_mode:
-            x = self._prep(x)
-
+        x = self._apply_preprocess(x)
         with torch.inference_mode():
             outputs = self.model(x)
-
-        cls_features = outputs.last_hidden_state[:, 0, :]
-        return cls_features, None
+        return outputs.last_hidden_state[:, 0, :], None
 
 
-class DINOPerceptual(nn.Module):
+class DINOPerceptual(_DINOBase):
     """DINO-based perceptual loss function.
 
     Computes LPIPS-like distance using frozen DINO ViT features:
@@ -167,43 +180,9 @@ class DINOPerceptual(nn.Module):
         normalize: bool = True,
         preprocess: Union[str, bool] = True,
     ):
-        super().__init__()
-        resolved_name = model_name or _resolve_model_name(model_size, version)
-        self.model = AutoModel.from_pretrained(resolved_name)
-        self.model_name = resolved_name
-        self.version = version
-        self.target_size = target_size
+        super().__init__(model_name, model_size, version, target_size, preprocess)
         self.layers = layers
         self.normalize_feats = normalize
-        self.preprocess_mode = preprocess
-
-        # ImageNet normalization for internal preprocessing
-        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
-
-        # HuggingFace processor for "auto" mode
-        self._hf_processor = None
-        if preprocess == "auto":
-            self._hf_processor = AutoImageProcessor.from_pretrained(resolved_name)
-
-        # Freeze
-        self.model.eval()
-        for p in self.model.parameters():
-            p.requires_grad_(False)
-
-        self.feature_dim = self.model.config.hidden_size
-
-    def _prep(self, x: torch.Tensor) -> torch.Tensor:
-        """Internal preprocessing: [-1,1] -> ImageNet normalized, optionally resized."""
-        x = (x + 1.0) / 2.0  # [-1,1] -> [0,1]
-        B, C, H, W = x.shape
-        long_side = max(H, W)
-        if long_side > self.target_size:
-            scale = self.target_size / long_side
-            new_h, new_w = max(1, round(H * scale)), max(1, round(W * scale))
-            x = F.interpolate(x, size=(new_h, new_w), mode='bicubic', align_corners=False)
-        x = (x - self.mean) / self.std
-        return x
 
     @staticmethod
     def _l2_normalize(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
@@ -232,17 +211,8 @@ class DINOPerceptual(nn.Module):
         Returns:
             Per-image loss tensor of shape (B,).
         """
-        if self.preprocess_mode == "auto" and self._hf_processor is not None:
-            xp = self._hf_processor(pred, return_tensors="pt", do_rescale=False)["pixel_values"]
-            xt = self._hf_processor(target, return_tensors="pt", do_rescale=False)["pixel_values"]
-            xp = xp.to(self.mean.device)
-            xt = xt.to(self.mean.device).detach()
-        elif self.preprocess_mode:
-            xp = self._prep(pred)
-            xt = self._prep(target).detach()
-        else:
-            xp = pred
-            xt = target.detach()
+        xp = self._apply_preprocess(pred)
+        xt = self._apply_preprocess(target).detach()
 
         out_p = self.model(xp, output_hidden_states=True)
         out_t = self.model(xt, output_hidden_states=True)
@@ -252,14 +222,11 @@ class DINOPerceptual(nn.Module):
         idxs = self._select_layers(hs_p)
         losses = []
         for i in idxs:
-            fp = hs_p[i]
-            ft = hs_t[i]
+            fp, ft = hs_p[i], hs_t[i]
             if self.normalize_feats:
-                fp = self._l2_normalize(fp)
-                ft = self._l2_normalize(ft)
-            l = (fp - ft).pow(2).mean(dim=(1, 2))
-            losses.append(l)
+                fp, ft = self._l2_normalize(fp), self._l2_normalize(ft)
+            losses.append((fp - ft).pow(2).mean(dim=(1, 2)))
 
-        if len(losses) == 0:
+        if not losses:
             return torch.zeros(pred.shape[0], device=pred.device, dtype=pred.dtype)
         return torch.stack(losses, dim=0).mean(dim=0)
