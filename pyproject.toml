@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dino-perceptual"
-version = "0.1.2"
+version = "0.1.3"
 description = "DINO-based perceptual loss for image reconstruction and generation"
 readme = "README.md"
 license = "MIT"
